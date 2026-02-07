@@ -110,40 +110,51 @@ def main():
     game = Game()  # Initialize game logic
     font = pygame.font.SysFont(None, 36)
     turn = 0  # 0 for player 1, 1 for player 2
-    dragging = False
-    drag_piece_idx = None
-    drag_offset_x = 0
-    drag_x = 0
-    drag_rot = 0  # Track rotation state for the dragged piece
-    piece_rects = []
-    drag_shape = None  # Store the current shape being dragged
+    selected_piece_idx = 0
+    piece_x = 0  # grid-aligned x for the selected piece
+    drag_shape = [row[:] for row in game.players[turn].pieces[selected_piece_idx].shape]
+    block_size = BOARD_WIDTH // 9
+    board_rect = pygame.Rect(
+        (SCREEN_WIDTH - BOARD_WIDTH) // 2,
+        BOARD_TOP_MARGIN + (SCREEN_HEIGHT - BOARD_TOP_MARGIN - BOARD_HEIGHT) // 2,
+        BOARD_WIDTH,
+        BOARD_HEIGHT
+    )
+    piece_x = board_rect.left  # Start at leftmost position
 
     running = True
     while running:
-        mouse_x, mouse_y = pygame.mouse.get_pos()
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
-            elif event.type == pygame.MOUSEBUTTONDOWN and not dragging:
-                draw_player_pieces(screen, game.players[turn], font, rects=piece_rects)
-                for idx, rect in enumerate(piece_rects):
-                    if rect.collidepoint(mouse_x, mouse_y):
-                        dragging = True
-                        drag_piece_idx = idx
-                        drag_offset_x = mouse_x - rect.x
-                        drag_rot = 0
-                        # Copy the shape so we can rotate independently
-                        drag_shape = [row[:] for row in game.players[turn].pieces[idx].shape]
-                        break
-            elif event.type == pygame.MOUSEBUTTONUP and dragging:
-                dragging = False
-                drag_piece_idx = None
-                drag_shape = None
-            elif event.type == pygame.KEYDOWN and dragging and drag_piece_idx is not None:
-                if event.key == pygame.K_SPACE:
-                    # Rotate the piece (work on drag_shape, not the player's piece)
-                    drag_shape = rotate_shape(drag_shape)
-                    drag_rot = (drag_rot + 1) % 4
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_TAB:
+                    # Cycle through available pieces
+                    selected_piece_idx = (selected_piece_idx + 1) % len(game.players[turn].pieces)
+                    drag_shape = [row[:] for row in game.players[turn].pieces[selected_piece_idx].shape]
+                    piece_x = board_rect.left
+                elif event.key == pygame.K_LEFT:
+                    # Move piece left
+                    min_x = board_rect.left
+                    if piece_x - block_size >= min_x:
+                        piece_x -= block_size
+                elif event.key == pygame.K_RIGHT:
+                    # Move piece right
+                    max_x = board_rect.right - len(drag_shape[0]) * block_size
+                    if piece_x + block_size <= max_x:
+                        piece_x += block_size
+                elif event.key == pygame.K_UP:
+                    # Rotate piece
+                    new_shape = rotate_shape(drag_shape)
+                    # Adjust x if needed to keep within board
+                    new_width = len(new_shape[0]) * block_size
+                    max_x = board_rect.right - new_width
+                    if piece_x > max_x:
+                        piece_x = max_x
+                    drag_shape = new_shape
+                elif event.key == pygame.K_DOWN:
+                    # Drop the piece (logic to be implemented)
+                    pass  # Placeholder for drop logic
 
         game.update()  # Update game logic
 
@@ -155,22 +166,9 @@ def main():
             text = font.render(f"{player.name} - Score: {player.score}", True, WHITE)
             screen.blit(text, (30, 10 + i * 36))
         # Display current player's pieces below the grid at scale 0.5
-        draw_player_pieces(screen, game.players[turn], font, rects=piece_rects, scale=0.5)
-        # Draw selected piece above the grid at scale 1 if dragging
-        if dragging and drag_piece_idx is not None and drag_shape is not None:
-            board_rect = pygame.Rect(
-                (SCREEN_WIDTH - BOARD_WIDTH) // 2,
-                BOARD_TOP_MARGIN + (SCREEN_HEIGHT - BOARD_TOP_MARGIN - BOARD_HEIGHT) // 2,
-                BOARD_WIDTH,
-                BOARD_HEIGHT
-            )
-            block_size = BOARD_WIDTH // 9
-            piece_width = len(drag_shape[0]) * block_size
-            min_x = board_rect.left
-            max_x = board_rect.right - piece_width
-            snapped_x = min(max(min_x, mouse_x - drag_offset_x), max_x)
-            snapped_x = min_x + ((snapped_x - min_x) // block_size) * block_size
-            draw_selected_piece(screen, type('Tmp', (), {'shape': drag_shape})(), snapped_x, block_size)
+        draw_player_pieces(screen, game.players[turn], font, scale=0.5)
+        # Draw selected piece above the grid at scale 1
+        draw_selected_piece(screen, type('Tmp', (), {'shape': drag_shape})(), piece_x, block_size)
         draw_grid(screen)
         # Draw your game objects here, possibly using game state
 
