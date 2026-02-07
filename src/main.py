@@ -35,6 +35,24 @@ def draw_grid(screen):
     # 9 rows (not visible, so nothing drawn)
 
 
+def draw_player_pieces(screen, player, font):
+    # Display player's pieces just above the grid, centered horizontally
+    board_rect = pygame.Rect(
+        (SCREEN_WIDTH - BOARD_WIDTH) // 2,
+        BOARD_TOP_MARGIN + (SCREEN_HEIGHT - BOARD_TOP_MARGIN - BOARD_HEIGHT) // 2,
+        BOARD_WIDTH,
+        BOARD_HEIGHT
+    )
+    # Calculate total width of all pieces (as text) for centering
+    piece_texts = [font.render(piece.shape_name, True, WHITE) for piece in player.pieces]
+    total_width = sum(text.get_width() for text in piece_texts) + (len(piece_texts) - 1) * 20
+    x = board_rect.left + (BOARD_WIDTH - total_width) // 2
+    y = board_rect.top - 40  # 40px above the board
+    for text in piece_texts:
+        screen.blit(text, (x, y))
+        x += text.get_width() + 20
+
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -43,6 +61,7 @@ def main():
 
     game = Game()  # Initialize game logic
     font = pygame.font.SysFont(None, 36)
+    turn = 0  # 0 for player 1, 1 for player 2
 
     running = True
     while running:
@@ -59,6 +78,8 @@ def main():
         for i, player in enumerate(game.players):
             text = font.render(f"{player.name} - Score: {player.score}", True, WHITE)
             screen.blit(text, (30, 10 + i * 36))
+        # Display current player's pieces above the grid
+        draw_player_pieces(screen, game.players[turn], font)
         draw_grid(screen)
         # Draw your game objects here, possibly using game state
 
