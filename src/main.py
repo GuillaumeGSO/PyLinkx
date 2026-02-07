@@ -35,22 +35,23 @@ def draw_grid(screen):
     # 9 rows (not visible, so nothing drawn)
 
 
-def draw_shape(screen, shape, x, y, block_size, color=WHITE):
+def draw_shape(screen, shape, x, y, block_size, color=WHITE, scale=1.0):
+    scaled_block = int(block_size * scale)
     for row_idx, row in enumerate(shape):
         for col_idx, cell in enumerate(row):
             if cell:
                 rect = pygame.Rect(
-                    x + col_idx * block_size,
-                    y + row_idx * block_size,
-                    block_size,
-                    block_size
+                    x + col_idx * scaled_block,
+                    y + row_idx * scaled_block,
+                    scaled_block,
+                    scaled_block
                 )
                 pygame.draw.rect(screen, color, rect)
                 pygame.draw.rect(screen, BLACK, rect, 2)  # outline
 
 
-def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects=None):
-    # Display player's pieces as Tetris shapes below the grid, centered horizontally
+def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects=None, scale=0.5):
+    # Display player's pieces as Tetris shapes below the grid, centered horizontally, at scale 0.5
     board_rect = pygame.Rect(
         (SCREEN_WIDTH - BOARD_WIDTH) // 2,
         BOARD_TOP_MARGIN + (SCREEN_HEIGHT - BOARD_TOP_MARGIN - BOARD_HEIGHT) // 2,
@@ -58,11 +59,12 @@ def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects
         BOARD_HEIGHT
     )
     block_size = BOARD_WIDTH // 9
+    scaled_block = int(block_size * scale)
     # Calculate total width of all pieces for centering
     piece_widths = []
     for piece in player.pieces:
         shape = piece.shape
-        width = len(shape[0]) * block_size
+        width = len(shape[0]) * scaled_block
         piece_widths.append(width)
     total_width = sum(piece_widths) + (len(piece_widths) - 1) * 20
     x = board_rect.left + (BOARD_WIDTH - total_width) // 2
@@ -71,28 +73,27 @@ def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects
         rects.clear()
     for idx, piece in enumerate(player.pieces):
         if hover_idx == idx and hover_x is not None:
-            draw_shape(screen, piece.shape, hover_x, y, block_size, color=(255,255,255))
+            # Don't draw the selected piece in the bottom row
             if rects is not None:
-                rects.append(pygame.Rect(hover_x, y, piece_widths[idx], len(piece.shape) * block_size))
+                rects.append(pygame.Rect(hover_x, y, piece_widths[idx], len(piece.shape) * scaled_block))
         else:
-            draw_shape(screen, piece.shape, x, y, block_size, color=player.color)
+            draw_shape(screen, piece.shape, x, y, block_size, color=player.color, scale=scale)
             if rects is not None:
-                rects.append(pygame.Rect(x, y, piece_widths[idx], len(piece.shape) * block_size))
+                rects.append(pygame.Rect(x, y, piece_widths[idx], len(piece.shape) * scaled_block))
         x += piece_widths[idx] + 20
 
 
 def draw_selected_piece(screen, piece, x, block_size):
-    # Draw the selected piece above the grid, centered horizontally
+    # Draw the selected piece above the grid, centered horizontally, at scale 1
     board_rect = pygame.Rect(
         (SCREEN_WIDTH - BOARD_WIDTH) // 2,
         BOARD_TOP_MARGIN + (SCREEN_HEIGHT - BOARD_TOP_MARGIN - BOARD_HEIGHT) // 2,
         BOARD_WIDTH,
         BOARD_HEIGHT
     )
-    # Adjust y so the piece is always just above the grid, regardless of its height
     piece_height = len(piece.shape) * block_size
     y = board_rect.top - piece_height - 10  # 10px above the board
-    draw_shape(screen, piece.shape, x, y, block_size, color=(255,255,255))
+    draw_shape(screen, piece.shape, x, y, block_size, color=(255,255,255), scale=1.0)
 
 
 def rotate_shape(shape):
@@ -153,9 +154,9 @@ def main():
         for i, player in enumerate(game.players):
             text = font.render(f"{player.name} - Score: {player.score}", True, WHITE)
             screen.blit(text, (30, 10 + i * 36))
-        # Display current player's pieces below the grid
-        draw_player_pieces(screen, game.players[turn], font, rects=piece_rects)
-        # Draw selected piece above the grid if dragging
+        # Display current player's pieces below the grid at scale 0.5
+        draw_player_pieces(screen, game.players[turn], font, rects=piece_rects, scale=0.5)
+        # Draw selected piece above the grid at scale 1 if dragging
         if dragging and drag_piece_idx is not None and drag_shape is not None:
             board_rect = pygame.Rect(
                 (SCREEN_WIDTH - BOARD_WIDTH) // 2,
@@ -169,7 +170,6 @@ def main():
             max_x = board_rect.right - piece_width
             snapped_x = min(max(min_x, mouse_x - drag_offset_x), max_x)
             snapped_x = min_x + ((snapped_x - min_x) // block_size) * block_size
-            # Draw the selected (dragged) piece above the grid, adjusting for height
             draw_selected_piece(screen, type('Tmp', (), {'shape': drag_shape})(), snapped_x, block_size)
         draw_grid(screen)
         # Draw your game objects here, possibly using game state
