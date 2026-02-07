@@ -1,5 +1,6 @@
 import pygame
 import sys
+from game import Game
 
 # Constants
 SCREEN_WIDTH = 800
@@ -40,17 +41,26 @@ def main():
     pygame.display.set_caption('PyLinkx Pygame Project')
     clock = pygame.time.Clock()
 
+    game = Game()  # Initialize game logic
+    font = pygame.font.SysFont(None, 36)
+
     running = True
     while running:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
 
+        game.update()  # Update game logic
+
         screen.fill(BLACK)
         # Draw area for scores/game info
         pygame.draw.rect(screen, BLACK, (0, 0, SCREEN_WIDTH, BOARD_TOP_MARGIN))
+        # Display player names and scores
+        for i, player in enumerate(game.players):
+            text = font.render(f"{player.name} - Score: {player.score}", True, WHITE)
+            screen.blit(text, (30, 10 + i * 36))
         draw_grid(screen)
-        # Draw your game objects here
+        # Draw your game objects here, possibly using game state
 
         pygame.display.flip()
         clock.tick(FPS)
