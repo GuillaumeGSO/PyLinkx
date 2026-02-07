@@ -8,8 +8,8 @@ SCREEN_HEIGHT = 600
 FPS = 60
 BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
 BOARD_MARGIN = 20      # Margin all around the board
-BOARD_WIDTH = 600
-BOARD_HEIGHT = 400
+BOARD_WIDTH = 400
+BOARD_HEIGHT = 250
 
 # Colors
 WHITE = (255, 255, 255)
@@ -35,22 +35,41 @@ def draw_grid(screen):
     # 9 rows (not visible, so nothing drawn)
 
 
+def draw_shape(screen, shape, x, y, block_size, color=WHITE):
+    for row_idx, row in enumerate(shape):
+        for col_idx, cell in enumerate(row):
+            if cell:
+                rect = pygame.Rect(
+                    x + col_idx * block_size,
+                    y + row_idx * block_size,
+                    block_size,
+                    block_size
+                )
+                pygame.draw.rect(screen, color, rect)
+                pygame.draw.rect(screen, BLACK, rect, 2)  # outline
+
+
 def draw_player_pieces(screen, player, font):
-    # Display player's pieces just above the grid, centered horizontally
+    # Display player's pieces as Tetris shapes just above the grid, centered horizontally
     board_rect = pygame.Rect(
         (SCREEN_WIDTH - BOARD_WIDTH) // 2,
         BOARD_TOP_MARGIN + (SCREEN_HEIGHT - BOARD_TOP_MARGIN - BOARD_HEIGHT) // 2,
         BOARD_WIDTH,
         BOARD_HEIGHT
     )
-    # Calculate total width of all pieces (as text) for centering
-    piece_texts = [font.render(piece.shape_name, True, WHITE) for piece in player.pieces]
-    total_width = sum(text.get_width() for text in piece_texts) + (len(piece_texts) - 1) * 20
+    block_size = BOARD_WIDTH // 9
+    # Calculate total width of all pieces for centering
+    piece_widths = []
+    for piece in player.pieces:
+        shape = piece.shape
+        width = len(shape[0]) * block_size
+        piece_widths.append(width)
+    total_width = sum(piece_widths) + (len(piece_widths) - 1) * 20
     x = board_rect.left + (BOARD_WIDTH - total_width) // 2
-    y = board_rect.top - 40  # 40px above the board
-    for text in piece_texts:
-        screen.blit(text, (x, y))
-        x += text.get_width() + 20
+    y = board_rect.top - block_size * 2 - 10  # 2 blocks above the board
+    for idx, piece in enumerate(player.pieces):
+        draw_shape(screen, piece.shape, x, y, block_size, color=player.color)
+        x += piece_widths[idx] + 20
 
 
 def main():
