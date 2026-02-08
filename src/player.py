@@ -1,6 +1,6 @@
 # Player class for PyLinkx
 
-from src.piece import Piece, TETRIS_SHAPES
+from piece import Piece, TETRIS_SHAPES
 
 class Player:
     def __init__(self, name, color):

@@ -1,6 +1,6 @@
 # Game logic for PyLinkx
 
-from src.player import Player
+from player import Player
 
 
 class Game:
@@ -46,24 +46,24 @@ class Game:
                     shape_cells.add((tx, ty))
 
         # 2. Support check: bottom-most block per column
-        for c in range(shape_width):
-            # find lowest block in this shape column
-            for r in reversed(range(shape_height)):
-                if shape[r][c] == 1:
-                    tx = grid_x + c
-                    ty = grid_y + r
-                    below_y = ty + 1
+        # for c in range(shape_width):
+        #     # find lowest block in this shape column
+        #     for r in reversed(range(shape_height)):
+        #         if shape[r][c] == 1:
+        #             tx = grid_x + c
+        #             ty = grid_y + r
+        #             below_y = ty + 1
 
-                    # bottom of grid = supported
-                    if below_y >= 9:
-                        break
+        #             # bottom of grid = supported
+        #             if below_y >= 9:
+        #                 break
 
-                    # supported by grid
-                    if self.grid[below_y][tx] > 0:
-                        break
+        #             # supported by grid
+        #             if self.grid[below_y][tx] > 0:
+        #                 break
 
-                    # otherwise unsupported
-                    return False
+        #             # otherwise unsupported
+        #             return False
 
         return True
 

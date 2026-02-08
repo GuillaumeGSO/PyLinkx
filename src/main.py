@@ -1,9 +1,9 @@
 import pygame
 import sys
-from src.game import Game
+from game import Game
 
 # Constants
-SCREEN_WIDTH = 800
+SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 600
 FPS = 30
 BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
@@ -262,7 +262,7 @@ def main():
         # 1. UI: Scores and Player Pieces
         for i, player in enumerate(game.players):
             text = font.render(f"{player.name}: {player.score}", True, WHITE)
-            screen.blit(text, (30, 10 + i * 36))
+            #screen.blit(text, (30, 10 + i * 36))
         draw_player_pieces(screen, game.players[turn], font, scale=0.5)
 
         # 2. GRID: Draw the static board and placed pieces
