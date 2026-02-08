@@ -1,6 +1,6 @@
 # Game logic for PyLinkx
 
-from player import Player
+from src.player import Player
 
 
 class Game:
@@ -28,16 +28,42 @@ class Game:
         self.grid = [[0 for _ in range(9)] for _ in range(9)]
 
     def is_valid_move(self, shape, grid_x, grid_y):
+        shape_cells = set()
+        shape_height = len(shape)
+        shape_width = len(shape[0])
+
+        # 1. Bounds & overlap check
         for r, row in enumerate(shape):
             for c, value in enumerate(row):
                 if value == 1:
                     tx, ty = grid_x + c, grid_y + r
 
-                    # 1. Basic checks: boundaries and overlaps
                     if not (0 <= tx < 9 and 0 <= ty < 9):
                         return False
                     if self.grid[ty][tx] > 0:
                         return False
+
+                    shape_cells.add((tx, ty))
+
+        # 2. Support check: bottom-most block per column
+        for c in range(shape_width):
+            # find lowest block in this shape column
+            for r in reversed(range(shape_height)):
+                if shape[r][c] == 1:
+                    tx = grid_x + c
+                    ty = grid_y + r
+                    below_y = ty + 1
+
+                    # bottom of grid = supported
+                    if below_y >= 9:
+                        break
+
+                    # supported by grid
+                    if self.grid[below_y][tx] > 0:
+                        break
+
+                    # otherwise unsupported
+                    return False
 
         return True
 

@@ -1,7 +1,5 @@
 # Piece (Pawn) class and Tetris shapes for PyLinkx
 
-
-
 TETRIS_SHAPES = {
     'L': [[0, 0, 1], [1, 1, 1]],
     'S': [[0, 1, 1], [1, 1, 0]],
