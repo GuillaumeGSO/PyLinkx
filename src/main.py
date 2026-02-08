@@ -5,7 +5,7 @@ from game import Game
 # Constants
 SCREEN_WIDTH = 800
 SCREEN_HEIGHT = 600
-FPS = 60
+FPS = 30
 BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
 BOARD_MARGIN = 20      # Margin all around the board
 BOARD_WIDTH = 400
@@ -14,6 +14,7 @@ BOARD_HEIGHT = 250
 # Colors
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
+BLUE = (0, 0, 255)
 INFO_BG = (30, 30, 30)
 BOARD_BG = (40, 40, 40)
 
@@ -47,10 +48,10 @@ def draw_shape(screen, shape, x, y, block_size, color=WHITE, scale=1.0):
                     scaled_block
                 )
                 pygame.draw.rect(screen, color, rect)
-                pygame.draw.rect(screen, BLACK, rect, 2)  # outline
+                pygame.draw.rect(screen, BLUE, rect, 1)  # outline
 
 
-def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects=None, scale=0.5):
+def draw_player_pieces(screen, player, hover_idx=None, hover_x=None, rects=None, scale=0.5):
     # Display player's pieces as Tetris shapes below the grid, centered horizontally, at scale 0.5
     board_rect = pygame.Rect(
         (SCREEN_WIDTH - BOARD_WIDTH) // 2,
@@ -72,6 +73,7 @@ def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects
     if rects is not None:
         rects.clear()
     for idx, piece in enumerate(player.pieces):
+        #TODO draw 2 lines of 7 pieces max
         if hover_idx == idx and hover_x is not None:
             # Don't draw the selected piece in the bottom row
             if rects is not None:
@@ -80,10 +82,10 @@ def draw_player_pieces(screen, player, font, hover_idx=None, hover_x=None, rects
             draw_shape(screen, piece.shape, x, y, block_size, color=player.color, scale=scale)
             if rects is not None:
                 rects.append(pygame.Rect(x, y, piece_widths[idx], len(piece.shape) * scaled_block))
-        x += piece_widths[idx] + 20
+        x += piece_widths[idx] + 20 # Spacing between pieces
 
 
-def draw_selected_piece(screen, piece, x, block_size):
+def draw_selected_piece(screen, piece, x, y, block_size, color):
     # Draw the selected piece above the grid, centered horizontally, at scale 1
     board_rect = pygame.Rect(
         (SCREEN_WIDTH - BOARD_WIDTH) // 2,
@@ -92,13 +94,17 @@ def draw_selected_piece(screen, piece, x, block_size):
         BOARD_HEIGHT
     )
     piece_height = len(piece.shape) * block_size
-    y = board_rect.top - piece_height - 10  # 10px above the board
-    draw_shape(screen, piece.shape, x, y, block_size, color=(255,255,255), scale=1.0)
+    #Use piece_height to avoid drawing off-screen
+    draw_shape(screen, piece.shape, x, y, block_size, color, scale=1.0)
 
 
 def rotate_shape(shape):
     # Rotate a 2D list (matrix) clockwise
     return [list(row) for row in zip(*shape[::-1])]
+
+def flip_shape(shape):
+    # Flip horizontally
+    return [list(row[::-1]) for row in shape]
 
 
 def main():
@@ -109,7 +115,7 @@ def main():
 
     game = Game()  # Initialize game logic
     font = pygame.font.SysFont(None, 36)
-    turn = 0  # 0 for player 1, 1 for player 2
+    turn = 1  # 0 for player 1, 1 for player 2
     selected_piece_idx = 0
     piece_x = 0  # grid-aligned x for the selected piece
     drag_shape = [row[:] for row in game.players[turn].pieces[selected_piece_idx].shape]
@@ -121,6 +127,7 @@ def main():
         BOARD_HEIGHT
     )
     piece_x = board_rect.left  # Start at leftmost position
+    piece_y = None  # Not dropped yet
 
     running = True
     while running:
@@ -128,11 +135,17 @@ def main():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_TAB:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.key == pygame.K_TAB:
                     # Cycle through available pieces
                     selected_piece_idx = (selected_piece_idx + 1) % len(game.players[turn].pieces)
                     drag_shape = [row[:] for row in game.players[turn].pieces[selected_piece_idx].shape]
                     piece_x = board_rect.left
+                    piece_y = None
+                elif event.key == pygame.K_RETURN:
+                    # Flip the piece horizontally
+                    drag_shape = flip_shape(drag_shape)
                 elif event.key == pygame.K_LEFT:
                     # Move piece left
                     min_x = board_rect.left
@@ -154,7 +167,14 @@ def main():
                     drag_shape = new_shape
                 elif event.key == pygame.K_DOWN:
                     # Drop the piece (logic to be implemented)
-                    pass  # Placeholder for drop logic
+                    # Need to verify if move is valid (not creating hole under the piece)
+                    new_height = len(drag_shape) * block_size
+                    piece_y = board_rect.bottom - new_height
+                    # release the piece and reset for next player
+                    turn = (turn + 1) % len(game.players) #Do that in a function later
+                    # When a piece is played, it should be removed from player's shapes
+                    #TODO
+
 
         game.update()  # Update game logic
 
@@ -165,11 +185,17 @@ def main():
         for i, player in enumerate(game.players):
             text = font.render(f"{player.name} - Score: {player.score}", True, WHITE)
             screen.blit(text, (30, 10 + i * 36))
+        current_player = game.players[turn]
         # Display current player's pieces below the grid at scale 0.5
-        draw_player_pieces(screen, game.players[turn], font, scale=0.5)
+        draw_player_pieces(screen, current_player, font, scale=0.5)
         # Draw selected piece above the grid at scale 1
-        draw_selected_piece(screen, type('Tmp', (), {'shape': drag_shape})(), piece_x, block_size)
+        piece_height = len(drag_shape) * block_size
+        if piece_y==None:
+            y = board_rect.top - piece_height - 10  # 10px above the board
+        else:
+            y = piece_y
         draw_grid(screen)
+        draw_selected_piece(screen, type('Tmp', (), {'shape': drag_shape})(), piece_x, y, block_size, current_player.color)
         # Draw your game objects here, possibly using game state
 
         pygame.display.flip()

@@ -8,4 +8,5 @@ class Player:
         self.score = 0
         self.color = color
         self.pieces = [Piece(shape, self) for shape in TETRIS_SHAPES]
+        self.pieces.extend([Piece(shape, self) for shape in TETRIS_SHAPES])
         # Add more player attributes as needed
