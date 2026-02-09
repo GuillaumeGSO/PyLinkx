@@ -143,8 +143,6 @@ def main():
     game = Game()  # Initialize game logic
     font = pygame.font.SysFont(None, 36)
     turn = 1  # 0 for player 1, 1 for player 2
-    game_over = False
-    winner_text = ""
     selected_piece_idx = 0
     piece_x = 0  # grid-aligned x for the selected piece
     drag_shape = [row[:] for row in game.players[turn].pieces[selected_piece_idx].shape]
@@ -238,8 +236,6 @@ def main():
                             ]
                             piece_x = board_rect.left
 
-                    else:
-                        print("Invalid Move! You can't place that there.")
                 print(game)
                 print("")
         game.update()  # Update game logic
