@@ -29,8 +29,6 @@ class Game:
 
     def is_valid_move(self, shape, grid_x, grid_y):
         shape_cells = set()
-        shape_height = len(shape)
-        shape_width = len(shape[0])
 
         # 1. Bounds & overlap check
         for r, row in enumerate(shape):
@@ -45,26 +43,43 @@ class Game:
 
                     shape_cells.add((tx, ty))
 
-        # 2. Support check: bottom-most block per column
-        # for c in range(shape_width):
-        #     # find lowest block in this shape column
-        #     for r in reversed(range(shape_height)):
-        #         if shape[r][c] == 1:
-        #             tx = grid_x + c
-        #             ty = grid_y + r
-        #             below_y = ty + 1
+        return True
 
-        #             # bottom of grid = supported
-        #             if below_y >= 9:
-        #                 break
+    def is_fully_supported(self, shape, grid_x, grid_y):
+        shape_height = len(shape)
+        shape_width = len(shape[0])
+        grid_height = len(self.grid)
 
-        #             # supported by grid
-        #             if self.grid[below_y][tx] > 0:
-        #                 break
+        for c in range(shape_width):
+            # 1. Find the lowest block in this specific column of the shape
+            lowest_r = -1
+            for r in reversed(range(shape_height)):
+                if shape[r][c] == 1:
+                    lowest_r = r
+                    break
 
-        #             # otherwise unsupported
-        #             return False
+            # 2. If this column of the shape is empty (no blocks), skip to next column
+            if lowest_r == -1:
+                continue
 
+            # 3. Calculate the position in the grid directly below this block
+            tx = grid_x + c
+            ty = grid_y + lowest_r
+            below_y = ty + 1
+
+            # 4. Check Support:
+            # If it's touching the floor, it's supported
+            if below_y >= grid_height:
+                continue  # This column is supported by the floor
+
+            # If there is a block in the grid below it, it's supported
+            if self.grid[below_y][tx] > 0:
+                continue  # This column is supported by another block
+
+            # 5. If we reach here, this specific column has air underneath it
+            return False
+
+        # If we checked all columns and none returned False, the whole piece is supported
         return True
 
     def place_piece(self, shape, grid_x, grid_y, turn):

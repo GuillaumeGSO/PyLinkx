@@ -5,7 +5,7 @@ from game import Game
 # Constants
 SCREEN_WIDTH = 600
 SCREEN_HEIGHT = 600
-FPS = 30
+FPS = 10
 BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
 BOARD_MARGIN = 20  # Margin all around the board
 # Updated Constants for square cells
@@ -158,24 +158,19 @@ def main():
     piece_x = board_rect.left  # Start at leftmost position
     piece_y = None  # Not dropped yet
 
+    ghost_grid_y = -1
     running = True
+
     while running:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN:
-
-                # 1. Calculer la position d'atterrissage (Ghost Y)
+                # 1. Landing is qlreqdy calculated (Ghost Y)
                 grid_x = (piece_x - board_rect.left) // block_size
-                ghost_grid_y = 0
-                for y_test in range(10):  # Parcourt la hauteur de la grille
-                    if game.is_valid_move(drag_shape, grid_x, y_test):
-                        ghost_grid_y = y_test
-                    else:
-                        break
 
-                # 2. Dessiner l'aperçu à cette position (en gris ou transparent)
+                # 2. Draw piece at valid landing spot (Same as ghost)
                 ghost_y_pixel = board_rect.top + (ghost_grid_y * block_size)
                 draw_shape(screen, drag_shape, piece_x, ghost_y_pixel, block_size)
 
@@ -217,16 +212,7 @@ def main():
                 elif event.key == pygame.K_DOWN:
                     grid_x = (piece_x - board_rect.left) // block_size
 
-                    # 1. Use the ghost logic to find the landing row
-                    ghost_grid_y = -1
-                    if game.is_valid_move(drag_shape, grid_x, 0):
-                        for y_test in range(9 - len(drag_shape) + 1):
-                            if game.is_valid_move(drag_shape, grid_x, y_test):
-                                ghost_grid_y = y_test
-                            else:
-                                break
-
-                    # 2. Place piece only if a valid landing spot was found
+                    # Place piece only if a valid landing spot was found
                     if ghost_grid_y != -1:
                         game.place_piece(drag_shape, grid_x, ghost_grid_y, turn)
                         game.players[turn].pieces.pop(selected_piece_idx)
@@ -255,6 +241,7 @@ def main():
                     else:
                         print("Invalid Move! You can't place that there.")
                 print(game)
+                print("")
         game.update()  # Update game logic
 
         screen.fill(BLACK)
@@ -262,7 +249,7 @@ def main():
         # 1. UI: Scores and Player Pieces
         for i, player in enumerate(game.players):
             text = font.render(f"{player.name}: {player.score}", True, WHITE)
-            #screen.blit(text, (30, 10 + i * 36))
+            # screen.blit(text, (30, 10 + i * 36))
         draw_player_pieces(screen, game.players[turn], font, scale=0.5)
 
         # 2. GRID: Draw the static board and placed pieces
@@ -279,6 +266,10 @@ def main():
                     ghost_grid_y = y_test
                 else:
                     break
+        if ghost_grid_y != -1 and not game.is_fully_supported(
+            drag_shape, grid_x, ghost_grid_y
+        ):
+            ghost_grid_y = -1
 
         # 4. RENDER GHOST
         if ghost_grid_y != -1:
