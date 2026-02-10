@@ -129,7 +129,7 @@ def main():
 
     game = Game()  # Initialize game logic
     font = pygame.font.SysFont(None, 36)
-    turn = 1  # 0 for player 1, 1 for player 2
+    turn = 0  # 0 for player 1, 1 for player 2
     piece_x = 0
     next_piece = game.players[turn].next_piece()
 
@@ -193,6 +193,7 @@ def main():
                         grid_x = (piece_x - board_rect.left) // block_size
                         game.place_piece_on_grid(next_piece, grid_x, ghost_grid_y, turn)
                         game.players[turn].drop_piece(next_piece)
+                        game.update()  # Update game logic
                         
                         # Switch turn
                         turn = (turn + 1) % len(game.players)
@@ -200,7 +201,6 @@ def main():
                         # Reset selection for next player
                         next_piece = game.players[turn].next_piece()
                         piece_x = board_rect.left
-                game.update()  # Update game logic
 
         screen.fill(BLACK)
 

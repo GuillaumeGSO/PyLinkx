@@ -24,7 +24,10 @@ class Game:
     def update(self):
         print(self)
         # Update game state each frame
-        self.check_for_winner(1)
+        winner = self.check_for_winner()
+        if winner:
+            self.running = False
+            winner.score = "Winner!"
         self.check_for_draw()
 
     def reset(self):
@@ -32,34 +35,11 @@ class Game:
         self.grid = [[0 for _ in range(9)] for _ in range(9)]
         self.running = True
 
-    def check_for_winner(self, turn):
-        pass
-        grid = self.grid
-        rows = len(grid)
-        cols = len(grid[0])
-
-        start_nodes = [(r, 0) for r in range(rows) if grid[r][0] == turn]
-        if not start_nodes:
-            return False
-
-        stack = start_nodes
-        visited = set(start_nodes)
-
-        while stack:
-            r, c = stack.pop()
-            if c == cols - 1:
-                return True
-            for dr in [-1, 0, 1]:
-                for dc in [-1, 0, 1]:
-                    if dr == 0 and dc == 0:
-                        continue 
-                    nr, nc = r + dr, c + dc
-                    if 0 <= nr < rows and 0 <= nc < cols:
-                        if grid[nr][nc] == turn and (nr, nc) not in visited:
-                            visited.add((nr, nc))
-                            stack.append((nr, nc))
-        return False
-
+    def check_for_winner(self):
+        for player in self.players:
+            if player.check_for_winner(self.grid, self.players.index(player) + 1):
+                return player
+        
     
     def check_for_draw(self):
         print("Checking for draw...")
