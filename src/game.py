@@ -27,7 +27,7 @@ class Game:
         winner = self.check_for_winner()
         if winner:
             self.running = False
-            winner.score = "Winner!"
+            winner.score = "Winner!" # type: ignore
         self.check_for_draw()
 
     def reset(self):
