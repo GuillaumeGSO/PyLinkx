@@ -1,6 +1,7 @@
 import pygame
 import sys
 from game import Game
+from piece import Piece
 
 # Constants
 SCREEN_WIDTH = 600
@@ -59,9 +60,9 @@ def draw_board(screen, game, board_rect):
                 pygame.draw.rect(screen, BLUE, rect, 1)
 
 
-def draw_shape(screen, shape, x, y, block_size, color=WHITE, scale=1.0):
+def draw_shape(screen, piece: Piece, x, y, block_size, color=WHITE, scale=1.0):
     scaled_block = int(block_size * scale)
-    for row_idx, row in enumerate(shape):
+    for row_idx, row in enumerate(piece.shape):
         for col_idx, cell in enumerate(row):
             if cell:
                 rect = pygame.Rect(
@@ -104,34 +105,20 @@ def draw_player_pieces(
             if rects is not None:
                 rects.append(
                     pygame.Rect(
-                        hover_x, y, piece_widths[idx], len(piece.shape) * scaled_block
+                        hover_x, y, piece_widths[idx], piece.height() * scaled_block
                     )
                 )
         else:
-            draw_shape(
-                screen, piece.shape, x, y, block_size, color=player.color, scale=scale
-            )
+            draw_shape(screen, piece, x, y, block_size, color=player.color, scale=scale)
             if rects is not None:
                 rects.append(
-                    pygame.Rect(
-                        x, y, piece_widths[idx], len(piece.shape) * scaled_block
-                    )
+                    pygame.Rect(x, y, piece_widths[idx], piece.height() * scaled_block)
                 )
         x += piece_widths[idx] + 20  # Spacing between pieces
 
 
 def draw_selected_piece(screen, piece, x, y, block_size, color):
-    draw_shape(screen, piece.shape, x, y, block_size, color, scale=1.0)
-
-
-def rotate_shape(shape):
-    # Rotate a 2D list (matrix) clockwise
-    return [list(row) for row in zip(*shape[::-1])]
-
-
-def flip_shape(shape):
-    # Flip horizontally
-    return [list(row[::-1]) for row in shape]
+    draw_shape(screen, piece, x, y, block_size, color, scale=1.0)
 
 
 def main():
@@ -143,9 +130,9 @@ def main():
     game = Game()  # Initialize game logic
     font = pygame.font.SysFont(None, 36)
     turn = 1  # 0 for player 1, 1 for player 2
-    selected_piece_idx = 0
-    piece_x = 0  # grid-aligned x for the selected piece
-    drag_shape = [row[:] for row in game.players[turn].pieces[selected_piece_idx].shape]
+    piece_x = 0
+    next_piece = game.players[turn].next_piece()
+
     block_size = BOARD_WIDTH // 9
     board_rect = pygame.Rect(
         (SCREEN_WIDTH - BOARD_WIDTH) // 2,
@@ -157,95 +144,70 @@ def main():
     piece_y = None  # Not dropped yet
 
     ghost_grid_y = -1
-    running = True
 
-    while running:
+    while game.running:
 
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                running = False
+                game.running = False
             elif event.type == pygame.KEYDOWN:
-                # 1. Landing is qlreqdy calculated (Ghost Y)
+                # 1. Landing is already calculated (Ghost Y)
                 grid_x = (piece_x - board_rect.left) // block_size
 
                 # 2. Draw piece at valid landing spot (Same as ghost)
                 ghost_y_pixel = board_rect.top + (ghost_grid_y * block_size)
-                draw_shape(screen, drag_shape, piece_x, ghost_y_pixel, block_size)
+                draw_shape(screen, next_piece, piece_x, ghost_y_pixel, block_size)
 
                 if event.key == pygame.K_ESCAPE:
-                    running = False
+                    game.running = False
                 elif event.key == pygame.K_TAB:
                     # Cycle through available pieces
-                    selected_piece_idx = (selected_piece_idx + 1) % len(
-                        game.players[turn].pieces
-                    )
-                    drag_shape = [
-                        row[:]
-                        for row in game.players[turn].pieces[selected_piece_idx].shape
-                    ]
+                    next_piece = game.players[turn].next_piece()
                     piece_x = board_rect.left
                     piece_y = None
                 elif event.key == pygame.K_RETURN:
                     # Flip the piece horizontally
-                    drag_shape = flip_shape(drag_shape)
+                    next_piece.flip()  # type: ignore
                 elif event.key == pygame.K_LEFT:
-                    # Move piece left
+                    # Move piece left if possible
                     min_x = board_rect.left
                     if piece_x - block_size >= min_x:
                         piece_x -= block_size
                 elif event.key == pygame.K_RIGHT:
-                    # Move piece right
-                    max_x = board_rect.right - len(drag_shape[0]) * block_size
+                    # Move piece right if possible
+                    max_x = board_rect.right - next_piece.width() * block_size
                     if piece_x + block_size <= max_x:
                         piece_x += block_size
                 elif event.key == pygame.K_UP:
                     # Rotate piece
-                    new_shape = rotate_shape(drag_shape)
+                    next_piece.rotate()  # type: ignore
                     # Adjust x if needed to keep within board
-                    new_width = len(new_shape[0]) * block_size
+                    new_width = next_piece.width() * block_size  # type: ignore
                     max_x = board_rect.right - new_width
                     if piece_x > max_x:
                         piece_x = max_x
-                    drag_shape = new_shape
                 elif event.key == pygame.K_DOWN:
-                    grid_x = (piece_x - board_rect.left) // block_size
-
-                    # Place piece only if a valid landing spot was found
+                    # Drop the piece with condition
                     if ghost_grid_y != -1:
-                        game.place_piece(drag_shape, grid_x, ghost_grid_y, turn)
-                        game.players[turn].pieces.pop(selected_piece_idx)
+                        # Place piece only if a valid landing spot was found
+                        grid_x = (piece_x - board_rect.left) // block_size
+                        game.place_piece_on_grid(next_piece, grid_x, ghost_grid_y, turn)
+                        game.players[turn].drop_piece(next_piece)
+                        
+                        # Switch turn
+                        turn = (turn + 1) % len(game.players)
 
-                        # 3. Switch turn and reset selection
-                        players_with_pieces = [
-                            i for i, p in enumerate(game.players) if len(p.pieces) > 0
-                        ]
-                        if not players_with_pieces:
-                            game_over = True
-                        else:
-                            turn = (turn + 1) % len(game.players)
-                            while len(game.players[turn].pieces) == 0:
-                                turn = (turn + 1) % len(game.players)
-
-                            # Reset selection for next player
-                            selected_piece_idx = 0
-                            drag_shape = [
-                                row[:]
-                                for row in game.players[turn]
-                                .pieces[selected_piece_idx]
-                                .shape
-                            ]
-                            piece_x = board_rect.left
-
-                print(game)
-                print("")
-        game.update()  # Update game logic
+                        # Reset selection for next player
+                        next_piece = game.players[turn].next_piece()
+                        piece_x = board_rect.left
+                game.update()  # Update game logic
 
         screen.fill(BLACK)
 
         # 1. UI: Scores and Player Pieces
         for i, player in enumerate(game.players):
             text = font.render(f"{player.name}: {player.score}", True, WHITE)
-            # screen.blit(text, (30, 10 + i * 36))
+            screen.blit(text, (30, 10 + i * 36))
         draw_player_pieces(screen, game.players[turn], font, scale=0.5)
 
         # 2. GRID: Draw the static board and placed pieces
@@ -256,14 +218,14 @@ def main():
         grid_x = (piece_x - board_rect.left) // block_size
         ghost_grid_y = -1
 
-        if game.is_valid_move(drag_shape, grid_x, 0):
-            for y_test in range(9 - len(drag_shape) + 1):
-                if game.is_valid_move(drag_shape, grid_x, y_test):
+        if game.is_valid_move(next_piece, grid_x, 0):
+            for y_test in range(9 - next_piece.height() + 1):
+                if game.is_valid_move(next_piece, grid_x, y_test):
                     ghost_grid_y = y_test
                 else:
                     break
         if ghost_grid_y != -1 and not game.is_fully_supported(
-            drag_shape, grid_x, ghost_grid_y
+            next_piece, grid_x, ghost_grid_y
         ):
             ghost_grid_y = -1
 
@@ -272,7 +234,7 @@ def main():
             ghost_y_pixel = board_rect.top + (ghost_grid_y * (BOARD_HEIGHT // 9))
             draw_shape(
                 screen,
-                drag_shape,
+                next_piece,
                 piece_x,
                 ghost_y_pixel,
                 block_size,
@@ -280,11 +242,11 @@ def main():
             )
 
         # 5. ACTIVE PIECE: Draw the piece controlled by the player
-        piece_height = len(drag_shape) * block_size
+        piece_height = next_piece.height() * block_size
         y = piece_y if piece_y is not None else (board_rect.top - piece_height - 10)
         draw_selected_piece(
             screen,
-            type("Tmp", (), {"shape": drag_shape})(),
+            type("Tmp", (), {"shape": next_piece.shape})(),
             piece_x,
             y,
             block_size,
