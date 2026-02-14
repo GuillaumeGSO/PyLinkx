@@ -5,6 +5,9 @@ from piece import Piece
 
 
 class Game:
+    PLAYING = "playing"
+    GAMEOVER = "gameover"
+
     def __init__(self):
         # Initialize game state here
         self.reset()
@@ -14,35 +17,71 @@ class Game:
             # Player("Player 3", (0, 128, 0)),  # Green
         ]
         # Add more game state as needed
+        self.current_piece: Piece
+
+    def reset(self):
+        # Reset the game state
+        self.grid = [[0 for _ in range(9)] for _ in range(9)]
+        self.status = Game.PLAYING
+        self.winner = None
 
     def __repr__(self) -> str:
         # Simple text representation of the game state
         for row in self.grid:
             print(row)
-        return ""
+        return f"Game State: ${self.status}"
+
+    def play_drop_piece(self, piece: Piece, grid_x, turn):
+        ghost_grid_y = self.calculate_ghost_position(piece, grid_x)
+        if ghost_grid_y is not None:
+            self.place_piece_on_grid(piece, grid_x, ghost_grid_y, turn)
+            self.players[turn].drop_piece(piece)
+            self.winner = self.check_for_winner()
+            if self.winner:
+                self.status = Game.GAMEOVER
+
+    def move_piece_left(self, piece: Piece):
+        if piece.x > 0:
+            piece.move_left()
+
+    def move_piece_right(self, piece: Piece):
+        if piece.x < 9 - piece.width():
+            piece.move_right()
+            
+    def rotate_piece(self, piece: Piece):
+        piece.rotate()
+        # Ensure the piece doesn't go out of bounds after rotation
+        if piece.x + piece.width() > 9:
+            piece.x = 9 - piece.width()
+
+    def calculate_ghost_position(self, piece: Piece, grid_x):
+        ghost_grid_y = None
+        if self.is_valid_move(piece, grid_x, 0):
+            for y_test in range(9 - piece.height() + 1):
+                if self.is_valid_move(piece, grid_x, y_test):
+                    ghost_grid_y = y_test
+                else:
+                    break
+
+        if ghost_grid_y is not None and not self.is_fully_supported(
+            piece, grid_x, ghost_grid_y
+        ):
+            ghost_grid_y = None
+        return ghost_grid_y
 
     def update(self):
+        print("Updating game state...")
         print(self)
-        # Update game state each frame
-        winner = self.check_for_winner()
-        if winner:
-            self.running = False
-            winner.score = "Winner!" # type: ignore
         self.check_for_draw()
-
-    def reset(self):
-        # Reset the game state
-        self.grid = [[0 for _ in range(9)] for _ in range(9)]
-        self.running = True
 
     def check_for_winner(self):
         for player in self.players:
             if player.check_for_winner(self.grid, self.players.index(player) + 1):
+                self.status = Game.GAMEOVER
                 return player
-        
-    
+
     def check_for_draw(self):
-        print("Checking for draw...")
+        # print("Checking for draw...")
         pass
 
     def is_valid_move(self, piece: Piece, grid_x, grid_y):

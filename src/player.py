@@ -21,6 +21,9 @@ class Player:
 
         # On avance l'index pour le prochain appel
         self.index = (self.index + 1) % len(self.pieces)
+        print("New piece selected:") 
+        print(piece)
+        
         return piece
 
     def has_pieces(self):
