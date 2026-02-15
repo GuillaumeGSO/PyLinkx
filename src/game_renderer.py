@@ -53,6 +53,7 @@ class GameRenderer:
                 self.game.current_piece, color=self.game.current_piece.color
             )
             self.draw_ghost_piece(self.game.current_piece)
+            self.draw_scores()
 
         elif self.game.status == Game.GAMEOVER:
             # Draw Winner
@@ -69,7 +70,7 @@ class GameRenderer:
             )
             self.screen.blit(btn_txt, self.replay_rect)
 
-    def draw_score(self):
+    def draw_scores(self):
         for i, player in enumerate(self.game.players):
             text = self.font.render(
                 f"{player.name}: {player.score}", True, GameRenderer.WHITE
