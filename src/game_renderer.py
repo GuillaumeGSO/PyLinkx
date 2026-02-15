@@ -18,7 +18,7 @@ class GameRenderer:
     BLACK = (0, 0, 0)
     BLUE = (0, 0, 255)
     INFO_BG = (30, 30, 30)
-    BOARD_BG = (40, 40, 40)
+    BOARD_BG = (30, 30, 30)
 
     """Pure display: knows about fonts, colors, and the screen."""
 
@@ -43,7 +43,7 @@ class GameRenderer:
         self.block_size = GameRenderer.BOARD_WIDTH // 9
 
     def draw(self):
-        self.screen.fill((30, 30, 30))
+        self.screen.fill(self.BLACK)
 
         # self.draw_score()
         self.draw_board()

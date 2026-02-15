@@ -1,3 +1,4 @@
+import random
 from piece import Piece, TETRIS_SHAPES
 
 
@@ -8,6 +9,7 @@ class Player:
         self.color = color
         self.pieces = [Piece(shape, self) for shape in TETRIS_SHAPES]
         self.pieces.extend([Piece(shape, self) for shape in TETRIS_SHAPES])
+        random.shuffle(self.pieces)
         self.index = 0
         # Add more player attributes as needed
 
