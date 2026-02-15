@@ -54,16 +54,13 @@ class GameRenderer:
             )
             self.draw_ghost_piece(self.game.current_piece)
 
-            txt = self.font.render(f"Playing... ", True, "green")
-            self.screen.blit(txt, (400, 20))
-
         elif self.game.status == Game.GAMEOVER:
             # Draw Winner
             if self.game.winner:
-                msg = self.font.render(f"{self.game.winner.name} Wins!", True, "green")
+                msg = self.font.render(f"{self.game.winner.name} Wins !", True, "green")
             else:
                 msg = self.font.render("It's a Tie!", True, "green")
-            self.screen.blit(msg, (300, 20))
+            self.screen.blit(msg, (self.SCREEN_WIDTH // 2 - msg.get_width() // 2, self.SCREEN_HEIGHT // 8))
 
             # Draw Replay Button
             btn_txt = self.font.render("[ Press R to replay ]", True, "yellow")
@@ -83,16 +80,16 @@ class GameRenderer:
         # Center the board
         pygame.draw.rect(self.screen, GameRenderer.BOARD_BG, self.board_rect)
         # Draw 9 columns (visible lines)
-        col_width = GameRenderer.BOARD_WIDTH // 9
-        for col in range(1, 9):
-            x = self.board_rect.left + col * col_width
-            pygame.draw.line(
-                self.screen,
-                GameRenderer.WHITE,
-                (x, self.board_rect.top),
-                (x, self.board_rect.bottom),
-                1,
-            )
+        # col_width = GameRenderer.BOARD_WIDTH // 9
+        # for col in range(1, 9):
+        #     x = self.board_rect.left + col * col_width
+        #     pygame.draw.line(
+        #         self.screen,
+        #         GameRenderer.WHITE,
+        #         (x, self.board_rect.top),
+        #         (x, self.board_rect.bottom),
+        #         1,
+        #     )
 
     def draw_grid(self):
         cell_w = GameRenderer.BOARD_WIDTH // 9

@@ -36,14 +36,17 @@ class Game:
             print(row)
         return f"Game State: ${self.status}"
 
-    def play_drop_piece(self, piece: Piece, grid_x, turn):
+    def play_drop_piece(self, piece: Piece, turn):
         self.ghost_grid_y = self.calculate_ghost_position(piece)
         if self.ghost_grid_y is not None:
-            self.place_piece_on_grid(piece, grid_x, self.ghost_grid_y, turn)
+            self.place_piece_on_grid(piece, piece.x, self.ghost_grid_y, turn)
             self.players[turn].drop_piece(piece)
             self.winner = self.check_for_winner()
             if self.winner:
                 self.status = Game.GAMEOVER
+            return True
+        return False
+            
 
     def move_piece_left(self, piece: Piece):
         if piece.x > 0:

@@ -48,9 +48,9 @@ def main():
                         # Flip the piece horizontally
                         game.current_piece.flip()
                     elif event.key == pygame.K_DOWN:
-                        game.play_drop_piece(game.current_piece, game.current_piece.x, turn)  # type: ignore
-                        turn = (turn + 1) % len(game.players)
-                        game.set_current_piece(game.players[turn].next_piece())
+                        if game.play_drop_piece(game.current_piece, turn):
+                            turn = (turn + 1) % len(game.players)
+                            game.set_current_piece(game.players[turn].next_piece())
                 elif game.status == game.GAMEOVER:
                     # should render button to reset game
                     print("Game Over! Press R to Restart or ESC to Quit.")
