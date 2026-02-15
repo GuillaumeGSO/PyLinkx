@@ -25,7 +25,7 @@ class Game:
         self.status = Game.PLAYING
         self.winner = None
         self.ghost_grid_y = None
-        
+
     def set_current_piece(self, piece: Piece):
         self.current_piece = piece
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
@@ -46,7 +46,6 @@ class Game:
                 self.status = Game.GAMEOVER
             return True
         return False
-            
 
     def move_piece_left(self, piece: Piece):
         if piece.x > 0:
@@ -81,7 +80,7 @@ class Game:
         print("Updating game state...")
         print(self)
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
-        self.check_for_draw()
+        self.update_scores()
 
     def check_for_winner(self):
         for player in self.players:
@@ -89,9 +88,9 @@ class Game:
                 self.status = Game.GAMEOVER
                 return player
 
-    def check_for_draw(self):
-        # print("Checking for draw...")
-        pass
+    def update_scores(self):
+        for idx, player in enumerate(self.players):
+            player.score = player.calculate_score(self.grid, idx + 1)
 
     def is_valid_move(self, piece: Piece, grid_x, grid_y):
         shape_cells = set()
