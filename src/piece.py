@@ -26,7 +26,7 @@ class Piece:
     def __repr__(self):
         for row in self.shape:
             print("   " * self.x + str(row))
-        return f"{self.x}"
+        return f"{self.shape_name} at ({self.x}, {self.y})"
     
     def rotate(self):
         self.shape = rotate_shape(self.shape)

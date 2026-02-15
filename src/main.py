@@ -5,8 +5,8 @@ from piece import Piece
 from game_renderer import GameRenderer
 
 # Constants
-SCREEN_WIDTH = 200
-SCREEN_HEIGHT = 200
+SCREEN_WIDTH = 600
+SCREEN_HEIGHT = 600
 FPS = 10
 
 
@@ -20,7 +20,7 @@ def main():
     renderer = GameRenderer(screen, game)
     font = pygame.font.SysFont(None, 36)
     turn = 0  # 0 for player 1, 1 for player 2
-    game.current_piece = game.players[turn].next_piece()
+    game.set_current_piece(game.players[turn].next_piece())
     running = True
 
     while running:
@@ -34,8 +34,7 @@ def main():
                         running = False
                     elif event.key == pygame.K_TAB: 
                         # Cycle through available pieces
-                        game.current_piece = game.players[turn].next_piece()
-                        game.current_piece.flip()  # type: ignore
+                        game.set_current_piece(game.players[turn].next_piece())
                     elif event.key == pygame.K_LEFT:
                         # Move piece left and stop at board edge
                         game.move_piece_left(game.current_piece)
@@ -51,18 +50,18 @@ def main():
                     elif event.key == pygame.K_DOWN:
                         game.play_drop_piece(game.current_piece, game.current_piece.x, turn)  # type: ignore
                         turn = (turn + 1) % len(game.players)
-                        game.current_piece = game.players[turn].next_piece()
+                        game.set_current_piece(game.players[turn].next_piece())
                 elif game.status == game.GAMEOVER:
                     # should render button to reset game
                     print("Game Over! Press R to Restart or ESC to Quit.")
                     if event.key == pygame.K_r:
                         game.reset()
                         turn = 0
-                        game.current_piece = game.players[turn].next_piece()
+                        game.set_current_piece(game.players[turn].next_piece())
                     elif event.key == pygame.K_ESCAPE:
                         running = False
-                # renderer.draw(game)
                 game.update()
+        renderer.draw()
         pygame.display.flip()
         clock.tick(FPS)
 
