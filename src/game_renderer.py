@@ -40,7 +40,7 @@ class GameRenderer:
             GameRenderer.BOARD_WIDTH,
             GameRenderer.BOARD_HEIGHT,
         )
-        self.block_size = GameRenderer.BOARD_WIDTH // 9
+        self.block_size = GameRenderer.BOARD_WIDTH // Game.GRID_SIZE
 
     def draw(self):
         self.screen.fill(self.BLACK)
@@ -56,12 +56,22 @@ class GameRenderer:
             self.draw_scores()
 
         elif self.game.status == Game.GAMEOVER:
+            
             # Draw Winner
             if self.game.winner:
                 msg = self.font.render(f"{self.game.winner.name} Wins !", True, "green")
+            elif len(self.game.get_players_in_play()) == 0:
+                msg = self.font.render("Winner by zone !", True, "green")
+                self.draw_scores()
             else:
-                msg = self.font.render("It's a Tie!", True, "green")
-            self.screen.blit(msg, (self.SCREEN_WIDTH // 2 - msg.get_width() // 2, self.SCREEN_HEIGHT // 8))
+                msg = self.font.render("It's a Tie !", True, "green")
+            self.screen.blit(
+                msg,
+                (
+                    self.SCREEN_WIDTH // 2 - msg.get_width() // 2,
+                    self.SCREEN_HEIGHT // 8,
+                ),
+            )
 
             # Draw Replay Button
             btn_txt = self.font.render("[ Press R to replay ]", True, "yellow")
@@ -71,30 +81,33 @@ class GameRenderer:
             self.screen.blit(btn_txt, self.replay_rect)
 
     def draw_scores(self):
+        text = self.font.render(f"Turn: {self.game.current_player.name}", True, "white")
+        self.screen.blit(text, (300, 00))
+
         for i, player in enumerate(self.game.players):
             text = self.font.render(
-                f"{player.name}: {player.score}", True, GameRenderer.WHITE
+                f"{player.name}: {player.score}", True, player.color
             )
             self.screen.blit(text, (30, 10 + i * 36))
 
     def draw_board(self):
         # Center the board
         pygame.draw.rect(self.screen, GameRenderer.BOARD_BG, self.board_rect)
-        # Draw 9 columns (visible lines)
-        # col_width = GameRenderer.BOARD_WIDTH // 9
-        # for col in range(1, 9):
-        #     x = self.board_rect.left + col * col_width
-        #     pygame.draw.line(
-        #         self.screen,
-        #         GameRenderer.WHITE,
-        #         (x, self.board_rect.top),
-        #         (x, self.board_rect.bottom),
-        #         1,
-        #     )
+        # Draw columns (visible lines)
+        col_width = GameRenderer.BOARD_WIDTH // Game.GRID_SIZE
+        for col in range(1, Game.GRID_SIZE):
+            x = self.board_rect.left + col * col_width
+            pygame.draw.line(
+                self.screen,
+                GameRenderer.WHITE,
+                (x, self.board_rect.top),
+                (x, self.board_rect.bottom),
+                1,
+            )
 
     def draw_grid(self):
-        cell_w = GameRenderer.BOARD_WIDTH // 9
-        cell_h = GameRenderer.BOARD_HEIGHT // 9
+        cell_w = GameRenderer.BOARD_WIDTH // Game.GRID_SIZE
+        cell_h = GameRenderer.BOARD_HEIGHT // Game.GRID_SIZE
 
         for row_idx, row in enumerate(self.game.grid):
             for col_idx, cell_value in enumerate(row):

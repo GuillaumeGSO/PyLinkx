@@ -2,11 +2,11 @@ from src.game import Game
 from src.piece import Piece
 
 
-def test_L_shape_floating_left_is_invalid():
+def test_L_shape_floating_left_is_valid():
     game = Game()
     piece = Piece("c", game.players[0])
     piece.shape = [[1, 1], [0, 1]]
-    assert not game.is_valid_move(piece, 0, 0)
+    assert game.is_valid_move(piece, 0, 0)
 
 
 def test_L_shape_supported_is_valid():

@@ -1,5 +1,4 @@
 # Game logic for PyLinkx
-
 from player import Player
 from piece import Piece
 
@@ -7,40 +6,48 @@ from piece import Piece
 class Game:
     PLAYING = "playing"
     GAMEOVER = "gameover"
+    GRID_SIZE = 9
 
     def __init__(self):
         # Initialize game state here
-        self.reset()
         self.players = [
-            Player("Player 1", (255, 215, 0)),  # Yellow
-            Player("Player 2", (220, 20, 60)),  # Red
-            # Player("Player 3", (0, 128, 0)),  # Green
+            Player("Player 1", 1, (255, 215, 0)),  # Yellow
+            Player("Player 2", 2, (220, 20, 60)),  # Red
+            # Player("Player 3", 3, (0, 128, 0)),  # Green
         ]
-        # Add more game state as needed
         self.current_piece: Piece
+        self.current_player: Player
+        self.reset()
 
     def reset(self):
         # Reset the game state
-        self.grid = [[0 for _ in range(9)] for _ in range(9)]
+        self.grid = [[0 for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)]
         self.status = Game.PLAYING
+        self.current_player = self.players[0]
+        for player in self.players:
+            player.score = 0
+            player.piece_index = 0
+            player.has_gave_up = False
         self.winner = None
         self.ghost_grid_y = None
+
+    def __repr__(self) -> str:
+        for row in self.grid:
+            print(row)
+        return f"Game State: ${self.status}"
 
     def set_current_piece(self, piece: Piece):
         self.current_piece = piece
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
 
-    def __repr__(self) -> str:
-        # Simple text representation of the game state
-        for row in self.grid:
-            print(row)
-        return f"Game State: ${self.status}"
+    def get_players_in_play(self):
+        return [player for player in self.players if not player.has_gave_up]
 
-    def play_drop_piece(self, piece: Piece, turn):
+    def play_drop_piece(self, piece: Piece, player: Player):
         self.ghost_grid_y = self.calculate_ghost_position(piece)
         if self.ghost_grid_y is not None:
-            self.place_piece_on_grid(piece, piece.x, self.ghost_grid_y, turn)
-            self.players[turn].drop_piece(piece)
+            self.place_piece_on_grid(piece, piece.x, self.ghost_grid_y, player)
+            self.current_player.drop_piece(piece)
             self.winner = self.check_for_winner()
             if self.winner:
                 self.status = Game.GAMEOVER
@@ -52,19 +59,24 @@ class Game:
             piece.move_left()
 
     def move_piece_right(self, piece: Piece):
-        if piece.x < 9 - piece.width():
+        if piece.x < self.GRID_SIZE - piece.width():
             piece.move_right()
 
     def rotate_piece(self, piece: Piece):
         piece.rotate()
         # Ensure the piece doesn't go out of bounds after rotation
-        if piece.x + piece.width() > 9:
-            piece.x = 9 - piece.width()
+        if piece.x + piece.width() > self.GRID_SIZE:
+            piece.x = self.GRID_SIZE - piece.width()
+
+    def give_up_and_check(self, player: Player):
+        player.give_up()
+        if self.get_players_in_play() == []:
+            self.status = Game.GAMEOVER
 
     def calculate_ghost_position(self, piece: Piece):
         ghost_grid_y = None
         if self.is_valid_move(piece, piece.x, 0):
-            for y_test in range(9 - piece.height() + 1):
+            for y_test in range(self.GRID_SIZE - piece.height() + 1):
                 if self.is_valid_move(piece, piece.x, y_test):
                     ghost_grid_y = y_test
                 else:
@@ -81,16 +93,30 @@ class Game:
         print(self)
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
         self.update_scores()
+        self.winner = self.check_for_winner()
 
     def check_for_winner(self):
         for player in self.players:
-            if player.check_for_winner(self.grid, self.players.index(player) + 1):
+            if player.check_if_winner(self.grid):
                 self.status = Game.GAMEOVER
                 return player
 
+    def get_next_player(self) -> Player:  # type: ignore
+        remaining_players = self.get_players_in_play()
+        if not remaining_players:
+            self.status = Game.GAMEOVER
+            return self.current_player
+
+        for p in range(len(self.players)):
+            if self.players[p] == self.current_player:
+                next_index = (p + 1) % len(self.players)
+                while self.players[next_index].has_gave_up:
+                    next_index = (next_index + 1) % len(self.players)
+                return self.players[next_index]
+
     def update_scores(self):
-        for idx, player in enumerate(self.players):
-            player.score = player.calculate_score(self.grid, idx + 1)
+        for player in self.players:
+            player.score = player.calculate_score(self.grid)
 
     def is_valid_move(self, piece: Piece, grid_x, grid_y):
         shape_cells = set()
@@ -101,7 +127,7 @@ class Game:
                 if value == 1:
                     tx, ty = grid_x + c, grid_y + r
 
-                    if not (0 <= tx < 9 and 0 <= ty < 9):
+                    if not (0 <= tx < self.GRID_SIZE and 0 <= ty < self.GRID_SIZE):
                         return False
                     if self.grid[ty][tx] > 0:
                         return False
@@ -147,9 +173,8 @@ class Game:
         # If we checked all columns and none returned False, the whole piece is supported
         return True
 
-    def place_piece_on_grid(self, piece, grid_x, grid_y, turn):
+    def place_piece_on_grid(self, piece, grid_x, grid_y, player: Player):
         for row_idx, row in enumerate(piece.shape):
             for col_idx, value in enumerate(row):
                 if value == 1:
-                    # Store the player's ID (turn + 1) to remember who placed it
-                    self.grid[grid_y + row_idx][grid_x + col_idx] = turn + 1
+                    self.grid[grid_y + row_idx][grid_x + col_idx] = player.value
