@@ -81,9 +81,6 @@ class GameRenderer:
             self.screen.blit(btn_txt, self.replay_rect)
 
     def draw_scores(self):
-        text = self.font.render(f"Turn: {self.game.current_player.name}", True, "white")
-        self.screen.blit(text, (300, 00))
-
         for i, player in enumerate(self.game.players):
             text = self.font.render(
                 f"{player.name}: {player.score}", True, player.color
