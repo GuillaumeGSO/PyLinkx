@@ -53,6 +53,7 @@ def main():
                             game.current_player = game.get_next_player()
                             game.set_current_piece(game.current_player.next_piece())
                     elif event.key == pygame.K_p:
+                        # Press P to give up and switch turn
                         game.give_up_and_check(game.current_player)
                         game.current_player = game.get_next_player()
                         game.set_current_piece(game.current_player.next_piece())

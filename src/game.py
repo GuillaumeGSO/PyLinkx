@@ -10,11 +10,7 @@ class Game:
 
     def __init__(self):
         # Initialize game state here
-        self.players = [
-            Player("Player 1", 1, (255, 215, 0)),  # Yellow
-            Player("Player 2", 2, (220, 20, 60)),  # Red
-            # Player("Player 3", 3, (0, 128, 0)),  # Green
-        ]
+        self.players = []
         self.current_piece: Piece
         self.current_player: Player
         self.reset()
@@ -23,11 +19,12 @@ class Game:
         # Reset the game state
         self.grid = [[0 for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)]
         self.status = Game.PLAYING
+        self.players = [
+            Player("Player 1", 1, (255, 215, 0)),  # Yellow
+            Player("Player 2", 2, (220, 20, 60)),  # Red
+            # Player("Player 3", 3, (0, 128, 0)),  # Green
+        ]
         self.current_player = self.players[0]
-        for player in self.players:
-            player.score = 0
-            player.piece_index = 0
-            player.has_gave_up = False
         self.winner = None
         self.ghost_grid_y = None
 
@@ -36,7 +33,9 @@ class Game:
             print(row)
         return f"Game State: ${self.status}"
 
-    def set_current_piece(self, piece: Piece):
+    def set_current_piece(self, piece: Piece | None):
+        if piece is None:
+            return
         self.current_piece = piece
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
 
@@ -48,8 +47,10 @@ class Game:
         if self.ghost_grid_y is not None:
             self.place_piece_on_grid(piece, piece.x, self.ghost_grid_y, player)
             self.current_player.drop_piece(piece)
+            if not self.current_player.has_pieces():
+                self.current_player.give_up()
             self.winner = self.check_for_winner()
-            if self.winner:
+            if self.winner or len(self.get_players_in_play()) == 0:
                 self.status = Game.GAMEOVER
             return True
         return False

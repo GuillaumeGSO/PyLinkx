@@ -22,14 +22,11 @@ class Player:
         self.pieces.remove(piece)
 
     def next_piece(self):
-        self.piece_index = self.piece_index % len(self.pieces)
-        piece = self.pieces[self.piece_index]
-
+        if not self.has_pieces():
+            self.has_gave_up = True
+            return None            
         self.piece_index = (self.piece_index + 1) % len(self.pieces)
-        print("New piece selected:")
-        print(piece)
-
-        return piece
+        return self.pieces[self.piece_index]
 
     def give_up(self):
         self.has_gave_up = True
