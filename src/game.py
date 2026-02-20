@@ -272,9 +272,9 @@ class Game:
             if success:
                 self.current_player = self.get_next_player()
                 self.set_current_piece(self.current_player.next_piece())
-            return success
-        else:
-            return False
+                return success
+        
+        return False
 
     def get_reward(self, player_idx: int) -> float:
         """

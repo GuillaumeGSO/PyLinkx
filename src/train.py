@@ -193,7 +193,7 @@ def quick_test():
         action = env.action_space.sample()
         obs, reward, terminated, truncated, info = env.step(action)
         print(
-            f"   Step {step + 1}: action={action}, reward={reward:.2f}, "
+            f"   Step {step + 1}: player={info['current_player_idx']+1}, action={action}, reward={reward:.2f}, "
             f"done={terminated or truncated}"
         )
 

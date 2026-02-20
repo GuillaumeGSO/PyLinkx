@@ -2,7 +2,7 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
-from src.game import Game
+from game import Game
 import random
 
 
@@ -114,7 +114,10 @@ class PyLinkxEnv(gym.Env):
         # Get next observation
         observation = self._get_observation()
         info = self._get_info()
-
+        
+        if reward == 0.0 and action == self.ACTION_DROP and action_valid:
+            # Provide a small dense reward for successful piece placement
+            reward = 0.5
         return observation, reward, terminated, False, info
 
     def render(self):
@@ -171,6 +174,7 @@ class PyLinkxEnv(gym.Env):
         - Path-finding win: +2.0 (higher reward for strategic victory)
         - Score-based win: +1.0 (when all pieces used or players passed)
         - Loss/Game Over: -0.5
+        - Legally drop piece : 0.1 (encourage piece placement)
         - During gameplay: 0.0
 
         Path-finding wins are more valuable as they require strategic placement.
