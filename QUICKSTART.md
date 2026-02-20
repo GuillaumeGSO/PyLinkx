@@ -125,7 +125,8 @@ Statistics:
    Min Reward:     -0.50
 ```
 TODO add differentiated winning rewards
-- `Reward = 1.00`: Agent won game
+- `Reward = 2.00`: Agent won game by path
+- `Reward = 1.00`: Agent won game by surface
 - `Reward = -0.50`: Agent lost game
 - `Mean Reward > 0`: Agent is learning
 

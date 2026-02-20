@@ -77,12 +77,14 @@ class PyLinkxEnv(gym.Env):
         Execute one step of the environment with the given action.
 
         Args:
-            action: Action index (0-4)
-                0 = move_left
-                1 = move_right
-                2 = rotate
-                3 = drop (finalize placement)
-                4 = pass (give up)
+            action: Action index (0-6)
+                0 = select next piece (cycle through available pieces) 
+                1 = move_left
+                2 = move_right
+                3 = rotate
+                4 = flip (horizontal)
+                5 = drop (finalize placement)
+                6 = pass (give up)
 
         Returns:
             observation, reward, terminated, truncated, info

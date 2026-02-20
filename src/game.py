@@ -91,8 +91,8 @@ class Game:
         return ghost_grid_y
 
     def update(self):
-        print("Updating game state...")
-        print(self)
+        # print("Updating game state...")
+        # print(self)
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
         self.update_scores()
         self.winner = self.check_for_winner()
@@ -226,39 +226,52 @@ class Game:
         Actions: 0=move_left, 1=move_right, 2=rotate, 3=drop, 4=pass
         Returns all 5 action indices; validation happens in step().
         """
-        return [0, 1, 2, 3, 4]
+        return [0, 1, 2, 3, 4, 5]
 
     def execute_action(self, action: int) -> bool:
         """
         Executes an action on the current piece or player state.
 
         Actions:
-        0 = move_left
-        1 = move_right
-        2 = rotate
-        3 = drop (finalize placement)
-        4 = pass (give up)
+            0 = select next piece (cycle through available pieces) 
+            1 = move_left
+            2 = move_right
+            3 = rotate
+            4 = flip (horizontal)
+            5 = drop (finalize placement)
+            6 = pass (give up)
 
         Returns True if action was valid and executed, False otherwise.
         """
-        if action == 4:  # pass/give_up
+        if action == 6:  # pass/give_up
             self.give_up_and_check(self.current_player)
+            self.current_player = self.get_next_player()
+            self.set_current_piece(self.current_player.next_piece())
             return True
 
         if not hasattr(self, "current_piece"):
             return False
 
-        if action == 0:  # move_left
+        if action == 0:  # select next piece
+            self.set_current_piece(self.current_player.next_piece())
+            return True
+        elif action == 1:  # move_left
             self.move_piece_left(self.current_piece)
             return True
-        elif action == 1:  # move_right
+        elif action == 2:  # move_right
             self.move_piece_right(self.current_piece)
             return True
-        elif action == 2:  # rotate
+        elif action == 3:  # rotate
             self.rotate_piece(self.current_piece)
             return True
-        elif action == 3:  # drop
+        elif action == 4:  # flip horizontally
+            self.current_piece.flip()
+            return True
+        elif action == 5:  # drop
             success = self.play_drop_piece(self.current_piece, self.current_player)
+            if success:
+                self.current_player = self.get_next_player()
+                self.set_current_piece(self.current_player.next_piece())
             return success
         else:
             return False

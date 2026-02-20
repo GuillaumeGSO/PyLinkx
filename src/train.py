@@ -12,6 +12,7 @@ This script demonstrates how to:
 import numpy as np
 import sys
 from pathlib import Path
+from stable_baselines3.common.monitor import Monitor
 
 # Add src to path for imports
 sys.path.insert(0, str(Path(__file__).parent / "src"))
@@ -48,7 +49,7 @@ def train_agent(
     env = make_vec_env(PyLinkxEnv, n_envs=n_envs)
 
     # Create evaluation environment
-    eval_env = PyLinkxEnv()
+    eval_env = Monitor(PyLinkxEnv())
 
     # Setup evaluation callback
     eval_callback = EvalCallback(
