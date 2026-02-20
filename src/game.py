@@ -200,24 +200,29 @@ class Game:
 
     def get_valid_actions(self) -> list[int]:
         """
-        Returns a list of valid action indices for the current piece.
-        Actions: 0=move_left, 1=move_right, 2=rotate, 3=drop
-        Returns all 4 action indices; validation happens in step().
+        Returns a list of valid action indices for the current player.
+        Actions: 0=move_left, 1=move_right, 2=rotate, 3=drop, 4=pass
+        Returns all 5 action indices; validation happens in step().
         """
-        return [0, 1, 2, 3]
+        return [0, 1, 2, 3, 4]
 
     def execute_action(self, action: int) -> bool:
         """
-        Executes an action on the current piece.
+        Executes an action on the current piece or player state.
 
         Actions:
         0 = move_left
         1 = move_right
         2 = rotate
         3 = drop (finalize placement)
+        4 = pass (give up)
 
         Returns True if action was valid and executed, False otherwise.
         """
+        if action == 4:  # pass/give_up
+            self.give_up_and_check(self.current_player)
+            return True
+
         if not hasattr(self, "current_piece"):
             return False
 

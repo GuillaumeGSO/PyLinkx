@@ -18,11 +18,12 @@ class PyLinkxEnv(gym.Env):
 
     metadata = {"render_modes": ["debug"], "render_fps": 30}
 
-    # Action space: 0=move_left, 1=move_right, 2=rotate, 3=drop
+    # Action space: 0=move_left, 1=move_right, 2=rotate, 3=drop, 4=pass
     ACTION_MOVE_LEFT = 0
     ACTION_MOVE_RIGHT = 1
     ACTION_ROTATE = 2
     ACTION_DROP = 3
+    ACTION_PASS = 4
 
     def __init__(self, render_mode=None, max_steps=500):
         """
@@ -37,8 +38,8 @@ class PyLinkxEnv(gym.Env):
         self.step_count = 0
         self.game = Game()
 
-        # Action space: 4 discrete actions (0-3)
-        self.action_space = spaces.Discrete(4)
+        # Action space: 5 discrete actions (0-4)
+        self.action_space = spaces.Discrete(5)
 
         # Observation space: grid (9x9) + 4 scalar features
         # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
@@ -78,7 +79,12 @@ class PyLinkxEnv(gym.Env):
         Execute one step of the environment with the given action.
 
         Args:
-            action: Action index (0-3)
+            action: Action index (0-4)
+                0 = move_left
+                1 = move_right
+                2 = rotate
+                3 = drop (finalize placement)
+                4 = pass (give up)
 
         Returns:
             observation, reward, terminated, truncated, info
