@@ -179,3 +179,86 @@ class Game:
             for col_idx, value in enumerate(row):
                 if value == 1:
                     self.grid[grid_y + row_idx][grid_x + col_idx] = player.value
+
+    # ===== RL/Programmatic Interface Methods =====
+
+    def get_observation(self) -> dict:
+        """
+        Returns the current game state as an observation dictionary.
+        Suitable for RL agents to receive state information.
+        """
+        return {
+            "grid": [row[:] for row in self.grid],  # Copy of grid
+            "current_player_idx": self.players.index(self.current_player),
+            "scores": [player.score for player in self.players],
+            "current_piece": (
+                self.current_piece if hasattr(self, "current_piece") else None
+            ),
+            "is_game_over": self.status == Game.GAMEOVER,
+            "winner_idx": self.players.index(self.winner) if self.winner else None,
+        }
+
+    def get_valid_actions(self) -> list[int]:
+        """
+        Returns a list of valid action indices for the current piece.
+        Actions: 0=move_left, 1=move_right, 2=rotate, 3=drop
+        Returns all 4 action indices; validation happens in step().
+        """
+        return [0, 1, 2, 3]
+
+    def execute_action(self, action: int) -> bool:
+        """
+        Executes an action on the current piece.
+
+        Actions:
+        0 = move_left
+        1 = move_right
+        2 = rotate
+        3 = drop (finalize placement)
+
+        Returns True if action was valid and executed, False otherwise.
+        """
+        if not hasattr(self, "current_piece"):
+            return False
+
+        if action == 0:  # move_left
+            self.move_piece_left(self.current_piece)
+            return True
+        elif action == 1:  # move_right
+            self.move_piece_right(self.current_piece)
+            return True
+        elif action == 2:  # rotate
+            self.rotate_piece(self.current_piece)
+            return True
+        elif action == 3:  # drop
+            success = self.play_drop_piece(self.current_piece, self.current_player)
+            return success
+        else:
+            return False
+
+    def get_reward(self, player_idx: int) -> float:
+        """
+        Calculates reward for a specific player based on current game state.
+
+        Sparse reward structure:
+        - Win: +1.0
+        - Loss/Game Over: -0.5
+        - In progress: 0.0
+
+        Can be extended with incremental rewards based on score changes.
+        """
+        if self.status != Game.GAMEOVER:
+            return 0.0
+
+        player = self.players[player_idx]
+
+        if self.winner == player:
+            return 1.0
+        else:
+            return -0.5
+
+    def reset_piece_position(self):
+        """Reset the current piece to starting position (x=0, y=0)."""
+        if hasattr(self, "current_piece"):
+            self.current_piece.x = 0
+            self.current_piece.y = 0
