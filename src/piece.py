@@ -1,5 +1,3 @@
-# Piece (Pawn) class and Tetris shapes for PyLinkx
-
 TETRIS_SHAPES: dict[str, list[list[int]]] = {
     'L': [[0, 0, 1], [1, 1, 1]],
     'S': [[0, 1, 1], [1, 1, 0]],
@@ -21,15 +19,31 @@ class Piece:
         self.shape = TETRIS_SHAPES[shape_name]
         #self.owner = owner  # Player instance, should use type Player
         self.color = owner.color
+        self.x = 0
+        self.y = 0
         # self.played = False
-        
+    
+    def __repr__(self):
+        for row in self.shape:
+            print("   " * self.x + str(row))
+        return f"{self.shape_name} at ({self.x}, {self.y})"
+    
     def rotate(self):
         self.shape = rotate_shape(self.shape)
-    
+        print(self)
+
     def flip(self):
         self.shape = flip_shape(self.shape)
-        return self.shape
-
+        print(self)
+    
+    def move_left(self):
+        self.x -= 1
+        print(self)
+    
+    def move_right(self):
+        self.x += 1
+        print(self)
+        
     def width(self):
         return len(self.shape[0])
     
