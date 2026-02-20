@@ -23,8 +23,7 @@ pip install -r requirements.txt
 Test that the Gymnasium environment is working:
 
 ```bash
-cd src
-python train.py --mode test
+python3 src/train.py --mode test
 ```
 
 **Expected Output:**
@@ -38,7 +37,7 @@ python train.py --mode test
 Train a basic PPO agent:
 
 ```bash
-python train.py --mode train --timesteps 50000
+python3 src/train.py --mode train --timesteps 50000
 ```
 
 **Customization:**
@@ -58,7 +57,7 @@ python train.py --mode train --timesteps 50000
 Evaluate the trained agent:
 
 ```bash
-python train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10
+python3 src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10
 ```
 
 **Options:**
@@ -77,20 +76,20 @@ python train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 1
 ### Longer Training
 
 ```bash
-python train.py --mode train --timesteps 500000
+python3 src/train.py --mode train --timesteps 500000
 ```
 
 ### Different Model Paths
 
 ```bash
-python train.py --mode train --model models/my_agent.zip --timesteps 100000
-python train.py --mode evaluate --model models/my_agent.zip
+python3 src/train.py --mode train --model models/my_agent.zip --timesteps 100000
+python3 src/train.py --mode evaluate --model models/my_agent.zip
 ```
 
 ### View Games
 
 ```bash
-python train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 5 --render
+python3 src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 5 --render
 ```
 
 ## 6. Understanding Results
@@ -108,7 +107,7 @@ Using cuda device
 | time_elapsed        |    10.5 |
 ```
 
-- `ep_rew_mean`: Average reward per episode (higher is better, max 1.0)
+- `ep_rew_mean`: Average reward per episode (higher is better, max 2.0)
 - `ep_len_mean`: Average episode length (duration)
 - `fps`: Training speed (frames per second)
 
@@ -125,7 +124,7 @@ Statistics:
    Max Reward:      1.00
    Min Reward:     -0.50
 ```
-
+TODO add differentiated winning rewards
 - `Reward = 1.00`: Agent won game
 - `Reward = -0.50`: Agent lost game
 - `Mean Reward > 0`: Agent is learning
@@ -213,7 +212,7 @@ After training, your structure will look like:
 PyLinkx/
 ├── models/
 │   ├── ppo_pylinkx.zip          # Trained model
-│   └── best_model.zip            # Best model during training
+│   └── best_model.zip            # Best model during training (if using EvalCallback)
 ├── src/
 │   ├── game_env.py
 │   ├── train.py
@@ -227,7 +226,7 @@ PyLinkx/
 
 ## Learning Resources
 
-- **PyLinkx Specific**: See [src/Reinforcement learning/MIGRATION_SUMMARY.md](MIGRATION_SUMMARY.md)
+- **PyLinkx Specific**: See [src/Reinforcement learning/MIGRATION_SUMMARY.md](src/Reinforcement%20learning/MIGRATION_SUMMARY.md)
 - **Gymnasium Docs**: https://gymnasium.farama.org/
 - **Stable-Baselines3**: https://stable-baselines3.readthedocs.io/
 - **RL Fundamentals**: https://spinningup.openai.com/
@@ -239,14 +238,16 @@ PyLinkx/
 ```bash
 # Check environment works with more verbose output
 python -c "
-from src.game_env import PyLinkxEnv
+import sys
+sys.path.insert(0, 'src')
+from game_env import PyLinkxEnv
 env = PyLinkxEnv()
 obs, info = env.reset()
 print(f'Observation shape: {obs.shape}')
 print(f'Action space: {env.action_space}')
 for i in range(5):
     obs, reward, done, truncated, info = env.step(env.action_space.sample())
-    print(f'Step {i+1}: reward={reward}, done={done}')
+    print(f'Step {i+1}: reward={reward}, done={done or truncated}')
 env.close()
 print('✓ Environment working correctly!')
 "

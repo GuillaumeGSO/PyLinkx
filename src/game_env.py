@@ -3,8 +3,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from game import Game
-from player import Player
-from piece import Piece, TETRIS_SHAPES
 import random
 
 
@@ -102,6 +100,10 @@ class PyLinkxEnv(gym.Env):
         # Check if game is over
         terminated = self.game.status == Game.GAMEOVER
 
+        # If action was successful and game is not over, initialize next piece
+        if action_valid and not terminated:
+            self._initialize_next_piece()
+
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
         reward = self._calculate_reward(player_idx, terminated)
@@ -147,6 +149,7 @@ class PyLinkxEnv(gym.Env):
             "winner_idx": (
                 self.game.players.index(self.game.winner) if self.game.winner else None
             ),
+            "win_type": self.game.win_type,  # 'path' or 'score' or None
             "step_count": self.step_count,
         }
 
@@ -154,16 +157,26 @@ class PyLinkxEnv(gym.Env):
         """
         Calculate reward for the current action.
 
-        Sparse reward: +1 for win, -0.5 for loss, 0 otherwise
-        Can be extended with dense rewards based on score changes.
+        Reward structure:
+        - Path-finding win: +2.0 (higher reward for strategic victory)
+        - Score-based win: +1.0 (when all pieces used or players passed)
+        - Loss/Game Over: -0.5
+        - During gameplay: 0.0
+
+        Path-finding wins are more valuable as they require strategic placement.
         """
         if terminated:
             if (
                 self.game.winner
                 and self.game.players.index(self.game.winner) == player_idx
             ):
-                return 1.0
+                # Player won
+                if self.game.win_type == "path":
+                    return 2.0  # Higher reward for path-finding victory
+                else:
+                    return 1.0  # Standard reward for score-based victory
             else:
+                # Player lost
                 return -0.5
 
         return 0.0  # No reward during gameplay (sparse)

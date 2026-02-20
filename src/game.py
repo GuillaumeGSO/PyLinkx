@@ -26,6 +26,7 @@ class Game:
         ]
         self.current_player = self.players[0]
         self.winner = None
+        self.win_type = None  # 'path' or 'score'
         self.ghost_grid_y = None
 
     def __repr__(self) -> str:
@@ -97,10 +98,30 @@ class Game:
         self.winner = self.check_for_winner()
 
     def check_for_winner(self):
+        # First, check for path-finding win (higher reward)
         for player in self.players:
             if player.check_if_winner(self.grid):
                 self.status = Game.GAMEOVER
+                self.winner = player
+                self.win_type = "path"
                 return player
+
+        # Second, check for score-based win when all players are out
+        remaining_players = self.get_players_in_play()
+        if not remaining_players:
+            # All players have given up or run out of pieces
+            # Winner is the one with highest score
+            self.update_scores()  # Ensure scores are up to date
+            max_score = max(player.score for player in self.players)
+            winners = [p for p in self.players if p.score == max_score]
+
+            # If there's a tie, first player wins (could be randomized)
+            self.winner = winners[0]
+            self.win_type = "score"
+            self.status = Game.GAMEOVER
+            return self.winner
+
+        return None
 
     def get_next_player(self) -> Player:  # type: ignore
         remaining_players = self.get_players_in_play()
@@ -196,6 +217,7 @@ class Game:
             ),
             "is_game_over": self.status == Game.GAMEOVER,
             "winner_idx": self.players.index(self.winner) if self.winner else None,
+            "win_type": self.win_type,  # 'path', 'score', or None
         }
 
     def get_valid_actions(self) -> list[int]:
