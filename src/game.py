@@ -223,10 +223,10 @@ class Game:
     def get_valid_actions(self) -> list[int]:
         """
         Returns a list of valid action indices for the current player.
-        Actions: 0=move_left, 1=move_right, 2=rotate, 3=drop, 4=pass
-        Returns all 5 action indices; validation happens in step().
+        Actions: 0=select next piece, 1=move_left, 2=move_right, 3=rotate, 4=flip, 5=drop, 6=pass
+        Returns all 7 action indices; validation happens in execute_action().
         """
-        return [0, 1, 2, 3, 4, 5]
+        return [0, 1, 2, 3, 4, 5, 6]
 
     def execute_action(self, action: int) -> bool:
         """

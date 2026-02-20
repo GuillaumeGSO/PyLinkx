@@ -17,7 +17,7 @@ class TestPyLinkxEnvInitialization:
         assert env.observation_space is not None
 
     def test_action_space(self):
-        """Test that action space is discrete with 5 actions."""
+        """Test that action space is discrete with 7 actions."""
         env = PyLinkxEnv()
         assert isinstance(env.action_space, Discrete)
         assert env.action_space.n == 7
@@ -126,8 +126,8 @@ class TestPyLinkxEnvStep:
         env = PyLinkxEnv()
         env.reset()
 
-        # Test all 5 actions
-        for action in [0, 1, 2, 3, 4]:
+        # Test all 7 actions
+        for action in [0, 1, 2, 3, 4, 5, 6]:
             obs, reward, terminated, truncated, info = env.step(action)
             assert obs.shape == (9, 9, 1)
 
