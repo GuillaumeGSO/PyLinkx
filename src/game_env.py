@@ -14,14 +14,15 @@ class PyLinkxEnv(gym.Env):
     Supports both training and evaluation.
     """
 
-    metadata = {"render_modes": ["debug"], "render_fps": 30}
+    metadata = {"render_modes": ["debug"], "render_fps": 5}
 
-    # Action space: 0=move_left, 1=move_right, 2=rotate, 3=drop, 4=pass
-    ACTION_MOVE_LEFT = 0
-    ACTION_MOVE_RIGHT = 1
-    ACTION_ROTATE = 2
-    ACTION_DROP = 3
-    ACTION_PASS = 4
+    ACTION_CYCLE_PIECE = 0
+    ACTION_MOVE_LEFT = 1
+    ACTION_MOVE_RIGHT = 2
+    ACTION_ROTATE = 3
+    ACTION_FLIP = 4
+    ACTION_DROP = 5
+    ACTION_PASS = 6
 
     def __init__(self, render_mode=None, max_steps=500):
         """
@@ -36,8 +37,8 @@ class PyLinkxEnv(gym.Env):
         self.step_count = 0
         self.game = Game()
 
-        # Action space: 5 discrete actions (0-4)
-        self.action_space = spaces.Discrete(5)
+        # Action space: 7 discrete actions (0-6)
+        self.action_space = spaces.Discrete(7)
 
         # Observation space: grid (9x9) + 4 scalar features
         # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
@@ -78,7 +79,7 @@ class PyLinkxEnv(gym.Env):
 
         Args:
             action: Action index (0-6)
-                0 = select next piece (cycle through available pieces) 
+                0 = select next piece (cycle through available pieces)
                 1 = move_left
                 2 = move_right
                 3 = rotate
@@ -120,6 +121,13 @@ class PyLinkxEnv(gym.Env):
         """Render the current game state."""
         if self.render_mode == "debug":
             print(self.game)
+            # pygame.init()
+            # screen = pygame.display.set_mode(
+            # (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
+            # )
+            # pygame.display.set_caption("PyLinkx RL Environment - Debug Render")
+            # render = GameRenderer(screen, self.game)
+            # render.draw()
             print(f"Step: {self.step_count}")
             print(f"Grid:\n{np.array(self.game.grid)}")
             print(f"Scores: {[p.score for p in self.game.players]}")

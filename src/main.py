@@ -1,18 +1,16 @@
 import pygame
 import sys
 from game import Game
-from piece import Piece
 from game_renderer import GameRenderer
 
 # Constants
-SCREEN_WIDTH = 600
-SCREEN_HEIGHT = 600
 FPS = 10
-
 
 def main():
     pygame.init()
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+    screen = pygame.display.set_mode(
+        (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
+    )
     pygame.display.set_caption("PyLinkx Pygame Project")
     clock = pygame.time.Clock()
 

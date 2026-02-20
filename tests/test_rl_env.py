@@ -20,7 +20,7 @@ class TestPyLinkxEnvInitialization:
         """Test that action space is discrete with 5 actions."""
         env = PyLinkxEnv()
         assert isinstance(env.action_space, Discrete)
-        assert env.action_space.n == 5
+        assert env.action_space.n == 7
 
     def test_observation_space(self):
         """Test that observation space is correct shape and dtype."""

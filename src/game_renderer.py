@@ -6,6 +6,10 @@ from piece import Piece
 
 
 class GameRenderer:
+    
+    SCREEN_WIDTH = 600
+    SCREEN_HEIGHT = 600
+
 
     BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
     BOARD_MARGIN = 20  # Margin all around the board
