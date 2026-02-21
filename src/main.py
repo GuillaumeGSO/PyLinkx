@@ -6,6 +6,7 @@ from game_renderer import GameRenderer
 # Constants
 FPS = 10
 
+
 def main():
     pygame.init()
     screen = pygame.display.set_mode(

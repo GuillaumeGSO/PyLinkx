@@ -2,8 +2,11 @@
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
+import pygame
 from game import Game
 import random
+
+from game_renderer import GameRenderer
 
 
 class PyLinkxEnv(gym.Env):
@@ -120,19 +123,13 @@ class PyLinkxEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def render(self):
+    def render(self, renderer=None):
         """Render the current game state."""
         if self.render_mode == "debug":
-            print(self.game)
-            # pygame.init()
-            # screen = pygame.display.set_mode(
-            # (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
-            # )
-            # pygame.display.set_caption("PyLinkx RL Environment - Debug Render")
-            # render = GameRenderer(screen, self.game)
-            # render.draw()
+            if renderer:
+                renderer.draw()
             print(f"Step: {self.step_count}")
-            print(f"Grid:\n{np.array(self.game.grid)}")
+            print(f"Grid:\n{self.game.grid})")
             print(f"Scores: {[p.score for p in self.game.players]}")
 
     # SHOULD NOT BE HERE; move to game logic
@@ -199,7 +196,7 @@ class PyLinkxEnv(gym.Env):
         if action_valid and action_type == "DROP":
             return 1  # Encourage piece placement
         return 0 if action_valid else -0.5
-    
+
     def close(self):
         """Clean up resources."""
         pass

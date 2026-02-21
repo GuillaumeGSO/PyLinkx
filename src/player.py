@@ -14,7 +14,7 @@ class Player:
         self.pieces = [Piece(shape, self) for shape in TETRIS_SHAPES]
         self.pieces.extend([Piece(shape, self) for shape in TETRIS_SHAPES])
         random.shuffle(self.pieces)
-        
+
     def __repr__(self):
         return f"Player(name={self.name}, value={self.value}, score={self.score})"
 
@@ -24,7 +24,7 @@ class Player:
     def next_piece(self):
         if not self.has_pieces():
             self.has_gave_up = True
-            return None            
+            return None
         self.piece_index = (self.piece_index + 1) % len(self.pieces)
         return self.pieces[self.piece_index]
 

@@ -6,10 +6,9 @@ from piece import Piece
 
 
 class GameRenderer:
-    
+
     SCREEN_WIDTH = 600
     SCREEN_HEIGHT = 600
-
 
     BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
     BOARD_MARGIN = 20  # Margin all around the board
@@ -60,7 +59,7 @@ class GameRenderer:
             self.draw_scores()
 
         elif self.game.status == Game.GAMEOVER:
-            
+
             # Draw Winner
             if self.game.winner:
                 msg = self.font.render(f"{self.game.winner.name} Wins !", True, "green")

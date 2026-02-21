@@ -12,10 +12,13 @@ This script demonstrates how to:
 import numpy as np
 import sys
 from pathlib import Path
+import pygame
 from stable_baselines3.common.monitor import Monitor
 
-# Add src to path for imports
-sys.path.insert(0, str(Path(__file__).parent / "src"))
+# Add parent directory to path for relative imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from game_renderer import GameRenderer
 
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
@@ -127,6 +130,15 @@ def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False
     print(f"\n2. Running {num_episodes} evaluation episodes...")
     print("-" * 60)
 
+    renderer = None
+    if render:
+        pygame.init()
+        screen = pygame.display.set_mode(
+            (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
+        )
+        pygame.display.set_caption("PyLinkx RL Environment - Debug Render")
+        renderer = GameRenderer(screen, env.game)
+
     for episode in range(num_episodes):
         obs, info = env.reset()
         episode_reward = 0
@@ -141,7 +153,7 @@ def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False
             done = terminated or truncated
 
             if render:
-                env.render()
+                env.render(renderer)
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)

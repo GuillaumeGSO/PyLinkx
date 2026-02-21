@@ -237,7 +237,7 @@ class Game:
         Executes an action on the current piece or player state.
 
         Actions:
-            0 = select next piece (cycle through available pieces) 
+            0 = select next piece (cycle through available pieces)
             1 = move_left
             2 = move_right
             3 = rotate
@@ -274,7 +274,7 @@ class Game:
             if success:
                 self.current_player = self.get_next_player()
                 self.set_current_piece(self.current_player.next_piece())
-                return success, "DROP"        
+                return success, "DROP"
         return False, "INVALID"
 
     def reset_piece_position(self):
