@@ -28,7 +28,7 @@ from game_env import PyLinkxEnv
 
 
 def train_agent(
-    total_timesteps: int = 100000,
+    total_timesteps: int = 100_000,
     eval_episodes: int = 100,
     max_steps: int = 100,
     model_save_path: str = "models/ppo_pylinkx.zip",
@@ -213,7 +213,7 @@ def quick_test():
         obs, reward, terminated, truncated, info = env.step(action)
         print(
             f"   Step {step + 1}: player={info['current_player_idx']+1}, action={action}, reward={reward:.2f}, "
-            f"done={terminated or truncated}"
+            f"valid={info['action_valid']}, done={terminated or truncated}"
         )
 
         if terminated or truncated:

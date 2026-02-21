@@ -52,7 +52,7 @@ class PyLinkxEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=0, high=100, shape=(4,), dtype=np.int32),
+                "scalars": spaces.Box(low=0, high=100, shape=(5,), dtype=np.int32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -116,7 +116,7 @@ class PyLinkxEnv(gym.Env):
 
         # Get next observation
         observation = self._get_observation()
-        info = self._get_info()
+        info = self._get_info(action_valid)
 
         return observation, reward, terminated, False, info
 
@@ -156,10 +156,11 @@ class PyLinkxEnv(gym.Env):
         # 2. Contextual Scalars
         # Identity is vital: "Am I the one trying to connect my borders right now?"
         is_p1_turn = 1.0 if self.game.current_player == self.game.players[0] else 0.0
-
+        can_drop = 1.0 if self.game.ghost_grid_y else 0.0
         scalars = np.array(
             [
                 is_p1_turn,  # 1.0 for P1, 0.0 for P2
+                can_drop,  # 1.0 if current piece can be dropped, else 0.0
                 float(self.game.players[0].score),  # P1 points
                 float(self.game.players[1].score),  # P2 points
                 float(self.game.status == Game.GAMEOVER),  # Game state flag
@@ -169,7 +170,7 @@ class PyLinkxEnv(gym.Env):
 
         return {"grid": grid_array, "scalars": scalars}
 
-    def _get_info(self) -> dict:
+    def _get_info(self, action_valid=None) -> dict:
         """Get additional information about the environment state."""
         return {
             "current_player_idx": self.game.players.index(self.game.current_player),
@@ -180,6 +181,7 @@ class PyLinkxEnv(gym.Env):
             ),
             "win_type": self.game.win_type,  # 'path' or 'score' or None
             "step_count": self.step_count,
+            "action_valid": action_valid,
         }
 
     def _calculate_reward(
@@ -209,11 +211,15 @@ class PyLinkxEnv(gym.Env):
                     return 5.0  # Standard reward for score-based victory
             else:
                 # Player lost
-                return -5
+                return -5.0
 
         if action_valid and action_type == "DROP":
-            return 1  # Encourage piece placement
-        return 0 if action_valid else -0.5
+            return 2.0  # Encourage piece placement
+        elif action_valid and action_type=="MOVE":
+            return -0.1  # Small penalty for just moving 
+        elif action_type=="PASS":
+            return -2 # Penalize passing to encourage active play
+        return 0.1 if action_valid else -0.5
 
     def close(self):
         """Clean up resources."""
