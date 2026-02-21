@@ -224,30 +224,14 @@ class Game:
             "win_type": self.win_type,  # 'path', 'score', or None
         }
 
-    def get_valid_actions(self) -> list[int]:
-        """
-        Returns a list of valid action indices for the current player.
-        Actions: 0=select next piece, 1=move_left, 2=move_right, 3=rotate, 4=flip, 5=drop, 6=pass
-        Returns all 7 action indices; validation happens in execute_action().
-        """
-        return [0, 1, 2, 3, 4, 5, 6]
-
     def execute_action(self, action: int) -> tuple[bool, str]:
         """
         Executes an action on the current piece or player state.
-
-        Actions:
-            0 = select next piece (cycle through available pieces)
-            1 = move_left
-            2 = move_right
-            3 = rotate
-            4 = flip (horizontal)
-            5 = drop (finalize placement)
-            6 = pass (give up)
-
         Returns True if action was valid and executed, False otherwise.
         """
-        if action == 6:  # pass/give_up
+        from game_env import Actions
+
+        if action == Actions.ACTION_PASS:  # pass/give_up
             self.give_up_and_check(self.current_player)
             self.current_player = self.get_next_player()
             self.set_current_piece(self.current_player.next_piece())
@@ -256,20 +240,20 @@ class Game:
         if not hasattr(self, "current_piece"):
             return False, "INVALID"
 
-        if action == 0:  # select next piece
+        if action == Actions.ACTION_CYCLE_PIECE:  # select next piece
             self.set_current_piece(self.current_player.next_piece())
             return True, "MOVE"
-        elif action == 1:  # move_left
+        elif action == Actions.ACTION_MOVE_LEFT:  # move_left
             return self.move_piece_left(self.current_piece), "MOVE"
-        elif action == 2:  # move_right
+        elif action == Actions.ACTION_MOVE_RIGHT:  # move_right
             return self.move_piece_right(self.current_piece), "MOVE"
-        elif action == 3:  # rotate
+        elif action == Actions.ACTION_ROTATE:  # rotate
             self.rotate_piece(self.current_piece)
             return True, "MOVE"
-        elif action == 4:  # flip horizontally
+        elif action == Actions.ACTION_FLIP:  # flip horizontally
             self.current_piece.flip()
             return True, "MOVE"
-        elif action == 5:  # drop
+        elif action == Actions.ACTION_DROP:  # drop
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:
                 self.current_player = self.get_next_player()

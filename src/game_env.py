@@ -1,4 +1,5 @@
 # Gymnasium RL Environment for PyLinkx
+from enum import IntEnum
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -7,6 +8,16 @@ from game import Game
 import random
 
 from game_renderer import GameRenderer
+
+
+class Actions(IntEnum):
+    ACTION_CYCLE_PIECE = 0
+    ACTION_MOVE_LEFT = 1
+    ACTION_MOVE_RIGHT = 2
+    ACTION_ROTATE = 3
+    ACTION_FLIP = 4
+    ACTION_DROP = 5
+    ACTION_PASS = 6
 
 
 class PyLinkxEnv(gym.Env):
@@ -18,14 +29,6 @@ class PyLinkxEnv(gym.Env):
     """
 
     metadata = {"render_modes": ["debug"], "render_fps": 5}
-
-    ACTION_CYCLE_PIECE = 0
-    ACTION_MOVE_LEFT = 1
-    ACTION_MOVE_RIGHT = 2
-    ACTION_ROTATE = 3
-    ACTION_FLIP = 4
-    ACTION_DROP = 5
-    ACTION_PASS = 6
 
     def __init__(self, render_mode=None, max_steps=500):
         """
@@ -41,7 +44,7 @@ class PyLinkxEnv(gym.Env):
         self.game = Game()
 
         # Action space: 7 discrete actions (0-6)
-        self.action_space = spaces.Discrete(7)
+        self.action_space = spaces.Discrete(len(Actions))
 
         # Observation space: grid (9x9) + 4 scalar features
         # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
@@ -52,7 +55,6 @@ class PyLinkxEnv(gym.Env):
                 "scalars": spaces.Box(low=0, high=100, shape=(4,), dtype=np.int32),
             }
         )
-
         self.last_scores = [0, 0]  # Track score changes for dense rewards
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
@@ -102,14 +104,9 @@ class PyLinkxEnv(gym.Env):
 
         # Execute the action
         action_valid, action_type = self.game.execute_action(action)
-
+        self.game.update()
         # Check if game is over
         terminated = self.game.status == Game.GAMEOVER
-
-        # If action was successful and game is not over, initialize next piece
-        # SHOULD NOT BE HERE : move this to game logic
-        # if action_valid and not terminated:
-        # self._initialize_next_piece()
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
@@ -148,7 +145,7 @@ class PyLinkxEnv(gym.Env):
 
     def _get_observation(self) -> dict:
         """
-        Captures the grid for pathfinding (border connection) 
+        Captures the grid for pathfinding (border connection)
         and scalars for the current game state.
         """
         # 1. Grid (9, 9, 1) - Crucial for the "Border Connection" win condition
@@ -160,17 +157,17 @@ class PyLinkxEnv(gym.Env):
         # Identity is vital: "Am I the one trying to connect my borders right now?"
         is_p1_turn = 1.0 if self.game.current_player == self.game.players[0] else 0.0
 
-        scalars = np.array([
-            is_p1_turn,                          # 1.0 for P1, 0.0 for P2
-            float(self.game.players[0].score),      # P1 points
-            float(self.game.players[1].score),      # P2 points
-            float(self.game.status == Game.GAMEOVER) # Game state flag
-        ], dtype=np.float32)
+        scalars = np.array(
+            [
+                is_p1_turn,  # 1.0 for P1, 0.0 for P2
+                float(self.game.players[0].score),  # P1 points
+                float(self.game.players[1].score),  # P2 points
+                float(self.game.status == Game.GAMEOVER),  # Game state flag
+            ],
+            dtype=np.float32,
+        )
 
-        return {
-            "grid": grid_array,
-            "scalars": scalars
-        }
+        return {"grid": grid_array, "scalars": scalars}
 
     def _get_info(self) -> dict:
         """Get additional information about the environment state."""
