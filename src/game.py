@@ -56,13 +56,17 @@ class Game:
             return True
         return False
 
-    def move_piece_left(self, piece: Piece):
+    def move_piece_left(self, piece: Piece) -> bool:
         if piece.x > 0:
             piece.move_left()
+            return True
+        return False
 
-    def move_piece_right(self, piece: Piece):
+    def move_piece_right(self, piece: Piece) -> bool:
         if piece.x < self.GRID_SIZE - piece.width():
             piece.move_right()
+            return True
+        return False
 
     def rotate_piece(self, piece: Piece):
         piece.rotate()
@@ -228,7 +232,7 @@ class Game:
         """
         return [0, 1, 2, 3, 4, 5, 6]
 
-    def execute_action(self, action: int) -> bool:
+    def execute_action(self, action: int) -> tuple[bool, str]:
         """
         Executes an action on the current piece or player state.
 
@@ -247,55 +251,31 @@ class Game:
             self.give_up_and_check(self.current_player)
             self.current_player = self.get_next_player()
             self.set_current_piece(self.current_player.next_piece())
-            return True
+            return True, "PASS"
 
         if not hasattr(self, "current_piece"):
-            return False
+            return False, "INVALID"
 
         if action == 0:  # select next piece
             self.set_current_piece(self.current_player.next_piece())
-            return True
+            return True, "MOVE"
         elif action == 1:  # move_left
-            self.move_piece_left(self.current_piece)
-            return True
+            return self.move_piece_left(self.current_piece), "MOVE"
         elif action == 2:  # move_right
-            self.move_piece_right(self.current_piece)
-            return True
+            return self.move_piece_right(self.current_piece), "MOVE"
         elif action == 3:  # rotate
             self.rotate_piece(self.current_piece)
-            return True
+            return True, "MOVE"
         elif action == 4:  # flip horizontally
             self.current_piece.flip()
-            return True
+            return True, "MOVE"
         elif action == 5:  # drop
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:
                 self.current_player = self.get_next_player()
                 self.set_current_piece(self.current_player.next_piece())
-                return success
-        
-        return False
-
-    def get_reward(self, player_idx: int) -> float:
-        """
-        Calculates reward for a specific player based on current game state.
-
-        Sparse reward structure:
-        - Win: +1.0
-        - Loss/Game Over: -0.5
-        - In progress: 0.0
-
-        Can be extended with incremental rewards based on score changes.
-        """
-        if self.status != Game.GAMEOVER:
-            return 0.0
-
-        player = self.players[player_idx]
-
-        if self.winner == player:
-            return 1.0
-        else:
-            return -0.5
+                return success, "DROP"        
+        return False, "INVALID"
 
     def reset_piece_position(self):
         """Reset the current piece to starting position (x=0, y=0)."""

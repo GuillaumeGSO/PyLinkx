@@ -98,26 +98,26 @@ class PyLinkxEnv(gym.Env):
         self.step_count += 1
 
         # Execute the action
-        action_valid = self.game.execute_action(action)
+        action_valid, action_type = self.game.execute_action(action)
 
         # Check if game is over
         terminated = self.game.status == Game.GAMEOVER
 
         # If action was successful and game is not over, initialize next piece
+        # SHOULD NOT BE HERE : move this to game logic
         if action_valid and not terminated:
             self._initialize_next_piece()
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
-        reward = self._calculate_reward(player_idx, terminated)
+        reward = self._calculate_reward(
+            player_idx, action_valid, action_type, terminated
+        )
 
         # Get next observation
         observation = self._get_observation()
         info = self._get_info()
-        
-        if reward == 0.0 and action == self.ACTION_DROP and action_valid:
-            # Provide a small dense reward for successful piece placement
-            reward = 0.5
+
         return observation, reward, terminated, False, info
 
     def render(self):
@@ -135,6 +135,7 @@ class PyLinkxEnv(gym.Env):
             print(f"Grid:\n{np.array(self.game.grid)}")
             print(f"Scores: {[p.score for p in self.game.players]}")
 
+    # SHOULD NOT BE HERE; move to game logic
     def _initialize_next_piece(self):
         """Initialize the next piece for the current player."""
         next_piece = self.game.current_player.next_piece()
@@ -166,7 +167,9 @@ class PyLinkxEnv(gym.Env):
             "step_count": self.step_count,
         }
 
-    def _calculate_reward(self, player_idx: int, terminated: bool) -> float:
+    def _calculate_reward(
+        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool
+    ) -> float:
         """
         Calculate reward for the current action.
 
@@ -174,8 +177,8 @@ class PyLinkxEnv(gym.Env):
         - Path-finding win: +2.0 (higher reward for strategic victory)
         - Score-based win: +1.0 (when all pieces used or players passed)
         - Loss/Game Over: -0.5
-        - Legally drop piece : 0.1 (encourage piece placement)
-        - During gameplay: 0.0
+        - Legally drop piece : 0.5 (encourage piece placement)
+        - During gameplay: valid action: 0.1, invalid action: -0.1
 
         Path-finding wins are more valuable as they require strategic placement.
         """
@@ -186,15 +189,17 @@ class PyLinkxEnv(gym.Env):
             ):
                 # Player won
                 if self.game.win_type == "path":
-                    return 2.0  # Higher reward for path-finding victory
+                    return 10.0  # Higher reward for path-finding victory
                 else:
-                    return 1.0  # Standard reward for score-based victory
+                    return 5.0  # Standard reward for score-based victory
             else:
                 # Player lost
-                return -0.5
+                return -5
 
-        return 0.0  # No reward during gameplay (sparse)
-
+        if action_valid and action_type == "DROP":
+            return 1  # Encourage piece placement
+        return 0 if action_valid else -0.5
+    
     def close(self):
         """Clean up resources."""
         pass
