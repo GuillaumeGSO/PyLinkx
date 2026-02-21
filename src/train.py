@@ -30,6 +30,7 @@ from game_env import PyLinkxEnv
 def train_agent(
     total_timesteps: int = 100000,
     eval_episodes: int = 100,
+    max_steps: int = 100,
     model_save_path: str = "models/ppo_pylinkx.zip",
 ):
     """
@@ -39,6 +40,7 @@ def train_agent(
         total_timesteps: Total number of training timesteps
         eval_episodes: Number of episodes per evaluation
         model_save_path: Path to save the trained model
+        max_steps: Maximum steps per episode to prevent infinite loops
     """
     print("=" * 60)
     print("PyLinkx RL Training Script")
@@ -53,7 +55,7 @@ def train_agent(
     env = make_vec_env(PyLinkxEnv, n_envs=n_envs)
 
     # Create evaluation environment
-    eval_env = Monitor(PyLinkxEnv())
+    eval_env = Monitor(PyLinkxEnv(max_steps=max_steps))  # Wrap with Monitor for logging
 
     # Setup evaluation callback
     eval_callback = EvalCallback(
@@ -67,7 +69,7 @@ def train_agent(
     # Create and train the agent
     print("2. Creating PPO agent...")
     model = PPO(
-        "MlpPolicy",  # Multi-layer perceptron policy
+        "MultiInputPolicy",  # Multi-layer perceptron policy
         env,
         verbose=1,
         learning_rate=3e-4,
@@ -104,7 +106,9 @@ def train_agent(
     return model
 
 
-def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False):
+def evaluate_agent(
+    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100
+):
     """
     Evaluate a trained agent.
 
@@ -122,7 +126,7 @@ def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False
     model = PPO.load(model_path)
 
     # Create evaluation environment
-    env = PyLinkxEnv(render_mode="debug" if render else None)
+    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps)
 
     episode_rewards = []
     episode_lengths = []
@@ -131,6 +135,7 @@ def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False
     print("-" * 60)
 
     renderer = None
+    clock = None
     if render:
         pygame.init()
         screen = pygame.display.set_mode(
@@ -138,6 +143,7 @@ def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False
         )
         pygame.display.set_caption("PyLinkx RL Environment - Debug Render")
         renderer = GameRenderer(screen, env.game)
+        clock = pygame.time.Clock()
 
     for episode in range(num_episodes):
         obs, info = env.reset()
@@ -153,7 +159,8 @@ def evaluate_agent(model_path: str, num_episodes: int = 10, render: bool = False
             done = terminated or truncated
 
             if render:
-                env.render(renderer)
+                env.render(renderer, action=int(action))
+                clock.tick(10) if clock else None  # Limit to 10 FPS
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
@@ -197,7 +204,7 @@ def quick_test():
 
     print("2. Resetting environment...")
     obs, info = env.reset()
-    print(f"   Observation shape: {obs.shape}")
+    # print(f"   Observation shape: {obs.shape}")
     print(f"   Action space: {env.action_space}")
 
     print("3. Running 10 random steps...")
@@ -233,6 +240,12 @@ if __name__ == "__main__":
         help="Total training timesteps",
     )
     parser.add_argument(
+        "--maxsteps",
+        type=int,
+        default=100,
+        help="Limit episode length",
+    )
+    parser.add_argument(
         "--model",
         default="models/ppo_pylinkx.zip",
         help="Path to model file",
@@ -257,12 +270,14 @@ if __name__ == "__main__":
         trained_model = train_agent(
             total_timesteps=args.timesteps,
             model_save_path=args.model,
+            max_steps=args.maxsteps,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":
         results = evaluate_agent(
             model_path=args.model,
             num_episodes=args.eval_episodes,
+            max_steps=args.maxsteps,
             render=args.render,
         )
         print("\n✓ Evaluation completed!")

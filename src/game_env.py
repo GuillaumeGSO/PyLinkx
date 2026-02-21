@@ -46,11 +46,11 @@ class PyLinkxEnv(gym.Env):
         # Observation space: grid (9x9) + 4 scalar features
         # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
         # Scalars: [current_player_idx, player1_score, player2_score, is_game_over]
-        self.observation_space = spaces.Box(
-            low=0,
-            high=2,
-            shape=(9, 9, 1),  # Flattened as (9, 9, 1) for CNN compatibility
-            dtype=np.int8,
+        self.observation_space = spaces.Dict(
+            {
+                "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
+                "scalars": spaces.Box(low=0, high=100, shape=(4,), dtype=np.int32),
+            }
         )
 
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -108,8 +108,8 @@ class PyLinkxEnv(gym.Env):
 
         # If action was successful and game is not over, initialize next piece
         # SHOULD NOT BE HERE : move this to game logic
-        if action_valid and not terminated:
-            self._initialize_next_piece()
+        # if action_valid and not terminated:
+        # self._initialize_next_piece()
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
@@ -123,14 +123,18 @@ class PyLinkxEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def render(self, renderer=None):
+    def render(self, renderer=None, action=None):
         """Render the current game state."""
         if self.render_mode == "debug":
             if renderer:
                 renderer.draw()
-            print(f"Step: {self.step_count}")
-            print(f"Grid:\n{self.game.grid})")
-            print(f"Scores: {[p.score for p in self.game.players]}")
+                pygame.display.flip()
+
+            print(f"Step: {self.step_count} Action: {action}")
+            # print(f"Grid:\n")
+            # print(self.game.grid)
+            # print(f"Action: {action}")
+            # print(f"Scores: {[p.score for p in self.game.players]}")
 
     # SHOULD NOT BE HERE; move to game logic
     def _initialize_next_piece(self):
@@ -142,14 +146,31 @@ class PyLinkxEnv(gym.Env):
             # Player is out of pieces
             self.game.current_player.give_up()
 
-    def _get_observation(self) -> np.ndarray:
+    def _get_observation(self) -> dict:
         """
-        Get the current observation as a numpy array.
-        Returns grid as (9, 9, 1) array for CNN compatibility.
+        Captures the grid for pathfinding (border connection) 
+        and scalars for the current game state.
         """
+        # 1. Grid (9, 9, 1) - Crucial for the "Border Connection" win condition
+        # The CNN will learn to detect 'chains' of 1s or 2s across the grid.
         grid_array = np.array(self.game.grid, dtype=np.int8)
-        grid_array = np.expand_dims(grid_array, axis=-1)  # Add channel dimension
-        return grid_array
+        grid_array = np.expand_dims(grid_array, axis=-1)
+
+        # 2. Contextual Scalars
+        # Identity is vital: "Am I the one trying to connect my borders right now?"
+        is_p1_turn = 1.0 if self.game.current_player == self.game.players[0] else 0.0
+
+        scalars = np.array([
+            is_p1_turn,                          # 1.0 for P1, 0.0 for P2
+            float(self.game.players[0].score),      # P1 points
+            float(self.game.players[1].score),      # P2 points
+            float(self.game.status == Game.GAMEOVER) # Game state flag
+        ], dtype=np.float32)
+
+        return {
+            "grid": grid_array,
+            "scalars": scalars
+        }
 
     def _get_info(self) -> dict:
         """Get additional information about the environment state."""

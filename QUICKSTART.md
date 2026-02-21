@@ -232,30 +232,6 @@ PyLinkx/
 - **Stable-Baselines3**: https://stable-baselines3.readthedocs.io/
 - **RL Fundamentals**: https://spinningup.openai.com/
 
-## Troubleshooting
-
-**For detailed diagnostics:**
-
-```bash
-# Check environment works with more verbose output
-python -c "
-import sys
-sys.path.insert(0, 'src')
-from game_env import PyLinkxEnv
-env = PyLinkxEnv()
-obs, info = env.reset()
-print(f'Observation shape: {obs.shape}')
-print(f'Action space: {env.action_space}')
-for i in range(5):
-    obs, reward, done, truncated, info = env.step(env.action_space.sample())
-    print(f'Step {i+1}: reward={reward}, done={done or truncated}')
-env.close()
-print('✓ Environment working correctly!')
-"
-```
-
----
-
 **Happy training! 🚀**
 
 For issues or questions, check the comprehensive test suite in `tests/test_rl_env.py` for usage examples.
