@@ -1,4 +1,5 @@
 # Game logic for PyLinkx
+import random
 from player import Player
 from piece import Piece
 
@@ -38,6 +39,7 @@ class Game:
         if piece is None:
             return
         self.current_piece = piece
+        self.current_piece.x = random.randint(0, self.GRID_SIZE - piece.width())
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
 
     def get_players_in_play(self):
@@ -68,11 +70,21 @@ class Game:
             return True
         return False
 
-    def rotate_piece(self, piece: Piece):
+    def rotate_piece(self, piece: Piece) -> bool:
+        if piece.shape_name in ["u"]:
+            return False
         piece.rotate()
         # Ensure the piece doesn't go out of bounds after rotation
         if piece.x + piece.width() > self.GRID_SIZE:
             piece.x = self.GRID_SIZE - piece.width()
+        return True
+    
+    def flip_piece(self, piece: Piece) -> bool:
+        prev_piece_shape = piece.shape
+        piece.flip()
+        if piece.shape == prev_piece_shape:
+            return False
+        return True
 
     def give_up_and_check(self, player: Player):
         player.give_up()
@@ -242,17 +254,15 @@ class Game:
 
         if action == Actions.ACTION_CYCLE_PIECE:  # select next piece
             self.set_current_piece(self.current_player.next_piece())
-            return True, "MOVE"
+            return True, "CYCLE"
         elif action == Actions.ACTION_MOVE_LEFT:  # move_left
             return self.move_piece_left(self.current_piece), "MOVE"
         elif action == Actions.ACTION_MOVE_RIGHT:  # move_right
             return self.move_piece_right(self.current_piece), "MOVE"
         elif action == Actions.ACTION_ROTATE:  # rotate
-            self.rotate_piece(self.current_piece)
-            return True, "CHANGE"
+            return self.rotate_piece(self.current_piece), "CHANGE"
         elif action == Actions.ACTION_FLIP:  # flip horizontally
-            self.current_piece.flip()
-            return True, "CHANGE"
+            return self.flip_piece(self.current_piece), "CHANGE"
         elif action == Actions.ACTION_DROP:  # drop
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:

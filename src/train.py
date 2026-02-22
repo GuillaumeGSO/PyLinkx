@@ -163,10 +163,10 @@ def evaluate_agent(
                 ep_p1_turns += 1
             else:
                 # Player 2 try to drop 50% of the time,takes random actions
-                if random.random() < 0.5:
-                    action = Actions.ACTION_DROP
-                else:
-                    action = env.action_space.sample()
+                # if random.random() < 0.5:
+                #     action = Actions.ACTION_DROP
+                # else:
+                #     action = env.action_space.sample()
                 
                 action, _ = model.predict(obs, deterministic=True)
                 ep_p2_turns += 1

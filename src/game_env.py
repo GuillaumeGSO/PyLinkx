@@ -28,7 +28,7 @@ class PyLinkxEnv(gym.Env):
     Supports both training and evaluation.
     """
 
-    metadata = {"render_modes": ["debug"], "render_fps": 5}
+    metadata = {"render_modes": ["debug"], "render_fps": 8}
 
     def __init__(self, render_mode=None, max_steps=500):
         """
@@ -52,7 +52,7 @@ class PyLinkxEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(25,), dtype=np.float32),
+                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(26,), dtype=np.float32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -68,6 +68,8 @@ class PyLinkxEnv(gym.Env):
 
         self.game.reset()
         self.step_count = 0
+        self.steps_for_current_turn = 0
+        self.max_steps_by_turn = 15
         self.last_scores = [0, 0]
 
         # Initialize first piece
@@ -84,18 +86,24 @@ class PyLinkxEnv(gym.Env):
         Returns:
             observation, reward, terminated, truncated, info
         """
+        
         if self.step_count >= self.max_steps:
             # Episode truncated due to max steps
             observation = self._get_observation()
             return observation, 0.0, False, True, self._get_info()
 
         self.step_count += 1
+        self.steps_for_current_turn += 1
 
+        if self.steps_for_current_turn >= self.max_steps_by_turn:
+            self.steps_for_current_turn = 0
+            action = Actions.ACTION_DROP  # Force drop to end turn
         # Execute the action
         action_valid, action_type = self.game.execute_action(action)
         self.game.update()
+        
         # Check if game is over
-        terminated = self.game.status == Game.GAMEOVER
+        terminated = self.game.status == Game.GAMEOVER or not action_valid
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
@@ -182,9 +190,12 @@ class PyLinkxEnv(gym.Env):
         # 2. Get your 16-element shape array
         shape_vals = self._get_padded_shape(current_piece.shape)
 
+        remaining_actions_ratio = (self.max_steps_by_turn - self.steps_for_current_turn) / self.max_steps_by_turn
+
         # 3. Use concatenate to merge them into a single (25,) array
         scalars = np.concatenate([
             np.array(other_scalars, dtype=np.float32), 
+            [remaining_actions_ratio],
             shape_vals
         ])
 
@@ -210,13 +221,6 @@ class PyLinkxEnv(gym.Env):
         """
         Calculate reward for the current action.
 
-        Reward structure:
-        - Path-finding win: +2.0 (higher reward for strategic victory)
-        - Score-based win: +1.0 (when all pieces used or players passed)
-        - Loss/Game Over: -0.5
-        - Legally drop piece : 0.5 (encourage piece placement)
-        - During gameplay: valid action: 0.1, invalid action: -0.1
-
         Path-finding wins are more valuable as they require strategic placement.
         """
         if terminated:
@@ -226,21 +230,17 @@ class PyLinkxEnv(gym.Env):
             ):
                 # Player won
                 if self.game.win_type == "path":
-                    return 100.0  # Higher reward for path-finding victory
+                    return 200.0  # Higher reward for path-finding victory
                 else:
-                    return 50.0  # Standard reward for score-based victory
+                    return 150.0  # Standard reward for score-based victory
             else:
                 # Player lost
                 return -10.0
 
         # In play rewards/penalties
         if action_valid and action_type == "DROP":
-            return 1 # Encourage piece placement
-        elif action_valid and action_type == "MOVE":
-            return -0.1  # Small penalty for just moving
-        # elif action_type=="PASS":
-        #     return -2 # Penalize passing to encourage active play
-        return -0.1 if action_valid else -1
+            return 5 # Encourage piece placement
+        return -0.1
 
     def close(self):
         """Clean up resources."""
