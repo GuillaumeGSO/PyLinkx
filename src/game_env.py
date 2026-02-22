@@ -48,11 +48,11 @@ class PyLinkxEnv(gym.Env):
 
         # Observation space: grid (9x9) + 4 scalar features
         # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
-        # Scalars: [current_player_idx, player1_score, player2_score, is_game_over]
+        # Scalars: [current_player_idx, player1_score, player2_score, is_game_over] -> to be updated
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=0, high=100, shape=(5,), dtype=np.int32),
+                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(25,), dtype=np.float32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -132,6 +132,15 @@ class PyLinkxEnv(gym.Env):
             # Player is out of pieces
             self.game.current_player.give_up()
 
+    def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
+        """Pads any piece shape into a fixed 4x4 array."""
+        padded = np.zeros((4, 4), dtype=np.float32)
+        rows = len(shape)
+        cols = len(shape[0])
+        # Place the shape in the top-left of the 4x4 grid
+        padded[:rows, :cols] = np.array(shape)
+        return padded.flatten()  # Returns 16 scalars
+
     def _get_observation(self) -> dict:
         """
         Captures the grid for pathfinding (border connection)
@@ -143,16 +152,41 @@ class PyLinkxEnv(gym.Env):
         grid_array = np.expand_dims(grid_array, axis=-1)
 
         # 2. Contextual Scalars
-        can_drop = 1.0 if self.game.ghost_grid_y else 0.0
-        scalars = np.array(
+        current_piece = self.game.current_piece
+        piece_map = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
+        max_pieces = 2 * len(piece_map)  # move this logic to game
+        current_piece_id = float(piece_map[current_piece.shape_name]) / len(
+            piece_map
+        )  # Normalised
+        remaining_ratio = float(len(self.game.current_player.pieces)) / max_pieces
+
+        other_scalars = np.array(
             [
-                float(self.game.current_player.value),
-                can_drop,  # 1.0 if current piece can be dropped, else 0.0
-                float(self.game.current_player.score),
+                float(
+                    self.game.current_player.value
+                ),  # Allow player to knoz its value in the grid
+                float(current_piece.x) / self.game.GRID_SIZE,  # Normalize x position
+                float(current_piece.y) / self.game.GRID_SIZE,  # Normalize y position
+                float(
+                    self.game.ghost_grid_y if self.game.ghost_grid_y else -1
+                ),  # -1 if no ghost piece
+                current_piece_id,  # Categorical encoding of piece type
+                remaining_ratio,  # Percentage of pieces left
+                float(1.0 if self.game.ghost_grid_y else 0.0),
+                float(self.game.current_player.score)
+                / (self.game.GRID_SIZE * self.game.GRID_SIZE),  # Normalize score
                 float(self.game.status == Game.GAMEOVER),  # Game state flag
             ],
             dtype=np.float32,
         )
+        # 2. Get your 16-element shape array
+        shape_vals = self._get_padded_shape(current_piece.shape)
+
+        # 3. Use concatenate to merge them into a single (25,) array
+        scalars = np.concatenate([
+            np.array(other_scalars, dtype=np.float32), 
+            shape_vals
+        ])
 
         return {"grid": grid_array, "scalars": scalars}
 
@@ -202,8 +236,8 @@ class PyLinkxEnv(gym.Env):
         # In play rewards/penalties
         if action_valid and action_type == "DROP":
             return 5.0  # Encourage piece placement
-        elif action_valid and action_type=="MOVE":
-            return -0.01  # Small penalty for just moving 
+        elif action_valid and action_type == "MOVE":
+            return -0.01  # Small penalty for just moving
         # elif action_type=="PASS":
         #     return -2 # Penalize passing to encourage active play
         return -0.01 if action_valid else -1
