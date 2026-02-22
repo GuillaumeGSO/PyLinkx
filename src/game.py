@@ -231,11 +231,11 @@ class Game:
         """
         from game_env import Actions
 
-        if action == Actions.ACTION_PASS:  # pass/give_up
-            self.give_up_and_check(self.current_player)
-            self.current_player = self.get_next_player()
-            self.set_current_piece(self.current_player.next_piece())
-            return True, "PASS"
+        # if action == Actions.ACTION_PASS:  # pass/give_up
+        #     self.give_up_and_check(self.current_player)
+        #     self.current_player = self.get_next_player()
+        #     self.set_current_piece(self.current_player.next_piece())
+        #     return True, "PASS"
 
         if not hasattr(self, "current_piece"):
             return False, "INVALID"
@@ -249,10 +249,10 @@ class Game:
             return self.move_piece_right(self.current_piece), "MOVE"
         elif action == Actions.ACTION_ROTATE:  # rotate
             self.rotate_piece(self.current_piece)
-            return True, "MOVE"
+            return True, "CHANGE"
         elif action == Actions.ACTION_FLIP:  # flip horizontally
             self.current_piece.flip()
-            return True, "MOVE"
+            return True, "CHANGE"
         elif action == Actions.ACTION_DROP:  # drop
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:

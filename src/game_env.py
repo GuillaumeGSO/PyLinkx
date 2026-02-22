@@ -17,7 +17,7 @@ class Actions(IntEnum):
     ACTION_ROTATE = 3
     ACTION_FLIP = 4
     ACTION_DROP = 5
-    ACTION_PASS = 6
+    # ACTION_PASS = 6
 
 
 class PyLinkxEnv(gym.Env):
@@ -81,17 +81,6 @@ class PyLinkxEnv(gym.Env):
     def step(self, action: int):
         """
         Execute one step of the environment with the given action.
-
-        Args:
-            action: Action index (0-6)
-                0 = select next piece (cycle through available pieces)
-                1 = move_left
-                2 = move_right
-                3 = rotate
-                4 = flip (horizontal)
-                5 = drop (finalize placement)
-                6 = pass (give up)
-
         Returns:
             observation, reward, terminated, truncated, info
         """
@@ -154,15 +143,12 @@ class PyLinkxEnv(gym.Env):
         grid_array = np.expand_dims(grid_array, axis=-1)
 
         # 2. Contextual Scalars
-        # Identity is vital: "Am I the one trying to connect my borders right now?"
-        is_p1_turn = 1.0 if self.game.current_player == self.game.players[0] else 0.0
         can_drop = 1.0 if self.game.ghost_grid_y else 0.0
         scalars = np.array(
             [
-                is_p1_turn,  # 1.0 for P1, 0.0 for P2
+                float(self.game.current_player.value),
                 can_drop,  # 1.0 if current piece can be dropped, else 0.0
-                float(self.game.players[0].score),  # P1 points
-                float(self.game.players[1].score),  # P2 points
+                float(self.game.current_player.score),
                 float(self.game.status == Game.GAMEOVER),  # Game state flag
             ],
             dtype=np.float32,
@@ -206,20 +192,21 @@ class PyLinkxEnv(gym.Env):
             ):
                 # Player won
                 if self.game.win_type == "path":
-                    return 10.0  # Higher reward for path-finding victory
+                    return 20.0  # Higher reward for path-finding victory
                 else:
-                    return 5.0  # Standard reward for score-based victory
+                    return 10.0  # Standard reward for score-based victory
             else:
                 # Player lost
                 return -5.0
 
+        # In play rewards/penalties
         if action_valid and action_type == "DROP":
-            return 2.0  # Encourage piece placement
+            return 5.0  # Encourage piece placement
         elif action_valid and action_type=="MOVE":
-            return -0.1  # Small penalty for just moving 
-        elif action_type=="PASS":
-            return -2 # Penalize passing to encourage active play
-        return 0.1 if action_valid else -0.5
+            return -0.01  # Small penalty for just moving 
+        # elif action_type=="PASS":
+        #     return -2 # Penalize passing to encourage active play
+        return -0.01 if action_valid else -1
 
     def close(self):
         """Clean up resources."""

@@ -9,6 +9,7 @@ This script demonstrates how to:
 4. Evaluate agent performance
 """
 
+import random
 import numpy as np
 import sys
 from pathlib import Path
@@ -24,7 +25,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
 
-from game_env import PyLinkxEnv
+from game_env import Actions, PyLinkxEnv
 
 
 def train_agent(
@@ -130,6 +131,8 @@ def evaluate_agent(
 
     episode_rewards = []
     episode_lengths = []
+    p1_turns = []
+    p2_turns = []
 
     print(f"\n2. Running {num_episodes} evaluation episodes...")
     print("-" * 60)
@@ -150,9 +153,24 @@ def evaluate_agent(
         episode_reward = 0
         episode_length = 0
         done = False
+        ep_p1_turns = 0
+        ep_p2_turns = 0
 
         while not done:
-            action, _ = model.predict(obs, deterministic=True)
+            current_player = info["current_player_idx"]
+            if current_player == 0:  # Agent plays as player 1
+                action, _ = model.predict(obs, deterministic=True)
+                ep_p1_turns += 1
+            else:
+                # Player 2 try to drop 50% of the time,takes random actions
+                if random.random() < 0.5:
+                    action = Actions.ACTION_DROP
+                else:
+                    action = env.action_space.sample()
+                # action, _ = model.predict(obs, deterministic=True)
+                ep_p2_turns += 1
+
+            env.game.update()
             obs, reward, terminated, truncated, info = env.step(int(action))
             episode_reward += reward
             episode_length += 1
@@ -160,14 +178,18 @@ def evaluate_agent(
 
             if render:
                 env.render(renderer, action=int(action))
-                clock.tick(env.metadata["render_fps"]) if clock else None  # Limit to 10 FPS
+                (
+                    clock.tick(env.metadata["render_fps"]) if clock else None
+                )  # Limit to 10 FPS
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
+        p1_turns.append(ep_p1_turns)
+        p2_turns.append(ep_p2_turns)
 
         print(
             f"   Episode {episode + 1:3d}: Reward = {episode_reward:7.2f}, "
-            f"Length = {episode_length:4d}"
+            f"Length = {episode_length:4d}, P1 Turns = {ep_p1_turns}, P2 Turns = {ep_p2_turns}"
         )
 
     # Print statistics
@@ -183,6 +205,8 @@ def evaluate_agent(
     )
     print(f"   Max Reward:      {np.max(episode_rewards):.2f}")
     print(f"   Min Reward:      {np.min(episode_rewards):.2f}")
+    print(f"   Mean P1 Turns:   {np.mean(p1_turns):.1f} ± {np.std(p1_turns):.1f}")
+    print(f"   Mean P2 Turns:   {np.mean(p2_turns):.1f} ± {np.std(p2_turns):.1f}")
 
     env.close()
 
@@ -190,6 +214,8 @@ def evaluate_agent(
         "rewards": episode_rewards,
         "lengths": episode_lengths,
         "mean_reward": np.mean(episode_rewards),
+        "p1_turns": p1_turns,
+        "p2_turns": p2_turns,
     }
 
 
