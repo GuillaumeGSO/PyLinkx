@@ -226,21 +226,21 @@ class PyLinkxEnv(gym.Env):
             ):
                 # Player won
                 if self.game.win_type == "path":
-                    return 20.0  # Higher reward for path-finding victory
+                    return 100.0  # Higher reward for path-finding victory
                 else:
-                    return 10.0  # Standard reward for score-based victory
+                    return 50.0  # Standard reward for score-based victory
             else:
                 # Player lost
-                return -5.0
+                return -10.0
 
         # In play rewards/penalties
         if action_valid and action_type == "DROP":
-            return 5.0  # Encourage piece placement
+            return 1 # Encourage piece placement
         elif action_valid and action_type == "MOVE":
-            return -0.01  # Small penalty for just moving
+            return -0.1  # Small penalty for just moving
         # elif action_type=="PASS":
         #     return -2 # Penalize passing to encourage active play
-        return -0.01 if action_valid else -1
+        return -0.1 if action_valid else -1
 
     def close(self):
         """Clean up resources."""
