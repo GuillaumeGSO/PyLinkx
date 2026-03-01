@@ -82,6 +82,8 @@ class GameRenderer:
                 center=(self.SCREEN_WIDTH // 2, self.SCREEN_HEIGHT // 5)
             )
             self.screen.blit(btn_txt, self.replay_rect)
+            pygame.display.flip()
+            pygame.time.delay(3000)
 
     def draw_scores(self):
         for i, player in enumerate(self.game.players):

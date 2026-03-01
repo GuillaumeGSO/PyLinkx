@@ -69,7 +69,7 @@ class PyLinkxEnv(gym.Env):
         self.game.reset()
         self.step_count = 0
         self.steps_for_current_turn = 0
-        self.max_steps_by_turn = 15
+        self.max_steps_by_turn = 30
         self.last_scores = [0, 0]
 
         # Initialize first piece
@@ -96,10 +96,15 @@ class PyLinkxEnv(gym.Env):
         self.steps_for_current_turn += 1
 
         if self.steps_for_current_turn >= self.max_steps_by_turn:
-            self.steps_for_current_turn = 0
             action = Actions.ACTION_DROP  # Force drop to end turn
+            if self.render_mode == "debug":
+                print(f"Max steps for turn reached. Forcing drop action.")
+        if action == Actions.ACTION_DROP:
+            self.steps_for_current_turn = 0  # Reset turn step count on drop
         # Execute the action
         action_valid, action_type = self.game.execute_action(action)
+        if not action_valid and self.render_mode == "debug":
+            print(f"Invalid action {Actions(action).name}")
         self.game.update()
         
         # Check if game is over
@@ -117,14 +122,14 @@ class PyLinkxEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def render(self, renderer=None, action=None):
+    def render(self, renderer=None, action=Actions|None):
         """Render the current game state."""
         if self.render_mode == "debug":
             if renderer:
                 renderer.draw()
                 pygame.display.flip()
 
-            print(f"Step: {self.step_count} Action: {action}")
+            print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'}")
             # print(f"Grid:\n")
             # print(self.game.grid)
             # print(f"Action: {action}")
@@ -233,13 +238,11 @@ class PyLinkxEnv(gym.Env):
                     return 200.0  # Higher reward for path-finding victory
                 else:
                     return 150.0  # Standard reward for score-based victory
-            else:
-                # Player lost
-                return -10.0
-
+            if not action_valid:
+                return -50.0  # Heavier penalty for losing due to invalid action
         # In play rewards/penalties
         if action_valid and action_type == "DROP":
-            return 5 # Encourage piece placement
+            return 10 # Encourage piece placement
         return -0.1
 
     def close(self):

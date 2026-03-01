@@ -182,7 +182,7 @@ def evaluate_agent(
                 env.render(renderer, action=int(action))
                 (
                     clock.tick(env.metadata["render_fps"]) if clock else None
-                )  # Limit to 10 FPS
+                )
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
