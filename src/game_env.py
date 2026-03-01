@@ -172,7 +172,7 @@ class PyLinkxEnv(gym.Env):
             [
                 float(
                     self.game.current_player.value
-                ),  # Allow player to knoz its value in the grid
+                ),  # Allow player to know its value in the grid
                 float(current_piece.x) / self.game.GRID_SIZE,  # Normalize x position
                 float(current_piece.y) / self.game.GRID_SIZE,  # Normalize y position
                 float(

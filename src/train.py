@@ -32,6 +32,7 @@ def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
     max_steps: int = 100,
+    envs: int = 4,
     model_save_path: str = "models/ppo_pylinkx.zip",
 ):
     """
@@ -52,7 +53,7 @@ def train_agent(
 
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
-    n_envs = 4  # Number of parallel environments
+    n_envs = envs  # Number of parallel environments
     env = make_vec_env(PyLinkxEnv, n_envs=n_envs)
 
     # Create evaluation environment
@@ -62,7 +63,7 @@ def train_agent(
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path="./models/",
-        eval_freq=1000,
+        eval_freq=2000,
         n_eval_episodes=eval_episodes,
         deterministic=True,
     )
@@ -267,6 +268,12 @@ if __name__ == "__main__":
         help="Total training timesteps",
     )
     parser.add_argument(
+        "--envs",
+        type=int,
+        default=4,
+        help="Number of parallel environments for training",
+    )
+    parser.add_argument(
         "--maxsteps",
         type=int,
         default=100,
@@ -298,6 +305,7 @@ if __name__ == "__main__":
             total_timesteps=args.timesteps,
             model_save_path=args.model,
             max_steps=args.maxsteps,
+            envs=args.envs,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":
