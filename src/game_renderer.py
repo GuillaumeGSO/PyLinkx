@@ -7,6 +7,9 @@ from piece import Piece
 
 class GameRenderer:
 
+    SCREEN_WIDTH = 600
+    SCREEN_HEIGHT = 600
+
     BOARD_TOP_MARGIN = 80  # Space above the board for scores/info
     BOARD_MARGIN = 20  # Margin all around the board
     BOARD_SIZE = 360  # 360 is divisible by 9 (40px per cell)
@@ -56,7 +59,7 @@ class GameRenderer:
             self.draw_scores()
 
         elif self.game.status == Game.GAMEOVER:
-            
+
             # Draw Winner
             if self.game.winner:
                 msg = self.font.render(f"{self.game.winner.name} Wins !", True, "green")
@@ -79,6 +82,8 @@ class GameRenderer:
                 center=(self.SCREEN_WIDTH // 2, self.SCREEN_HEIGHT // 5)
             )
             self.screen.blit(btn_txt, self.replay_rect)
+            pygame.display.flip()
+            pygame.time.delay(3000)
 
     def draw_scores(self):
         for i, player in enumerate(self.game.players):

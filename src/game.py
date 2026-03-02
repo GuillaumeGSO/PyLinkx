@@ -1,4 +1,5 @@
 # Game logic for PyLinkx
+import random
 from player import Player
 from piece import Piece
 
@@ -26,6 +27,7 @@ class Game:
         ]
         self.current_player = self.players[0]
         self.winner = None
+        self.win_type = None  # 'path' or 'score'
         self.ghost_grid_y = None
 
     def __repr__(self) -> str:
@@ -37,6 +39,7 @@ class Game:
         if piece is None:
             return
         self.current_piece = piece
+        self.current_piece.x = random.randint(0, self.GRID_SIZE - piece.width())
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
 
     def get_players_in_play(self):
@@ -55,19 +58,33 @@ class Game:
             return True
         return False
 
-    def move_piece_left(self, piece: Piece):
+    def move_piece_left(self, piece: Piece) -> bool:
         if piece.x > 0:
             piece.move_left()
+            return True
+        return False
 
-    def move_piece_right(self, piece: Piece):
+    def move_piece_right(self, piece: Piece) -> bool:
         if piece.x < self.GRID_SIZE - piece.width():
             piece.move_right()
+            return True
+        return False
 
-    def rotate_piece(self, piece: Piece):
+    def rotate_piece(self, piece: Piece) -> bool:
+        if piece.shape_name in ["u"]:
+            return False
         piece.rotate()
         # Ensure the piece doesn't go out of bounds after rotation
         if piece.x + piece.width() > self.GRID_SIZE:
             piece.x = self.GRID_SIZE - piece.width()
+        return True
+    
+    def flip_piece(self, piece: Piece) -> bool:
+        prev_piece_shape = piece.shape
+        piece.flip()
+        if piece.shape == prev_piece_shape:
+            return False
+        return True
 
     def give_up_and_check(self, player: Player):
         player.give_up()
@@ -90,17 +107,37 @@ class Game:
         return ghost_grid_y
 
     def update(self):
-        print("Updating game state...")
-        print(self)
+        # print("Updating game state...")
+        # print(self)
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
         self.update_scores()
         self.winner = self.check_for_winner()
 
     def check_for_winner(self):
+        # First, check for path-finding win (higher reward)
         for player in self.players:
             if player.check_if_winner(self.grid):
                 self.status = Game.GAMEOVER
+                self.winner = player
+                self.win_type = "path"
                 return player
+
+        # Second, check for score-based win when all players are out
+        remaining_players = self.get_players_in_play()
+        if not remaining_players:
+            # All players have given up or run out of pieces
+            # Winner is the one with highest score
+            self.update_scores()  # Ensure scores are up to date
+            max_score = max(player.score for player in self.players)
+            winners = [p for p in self.players if p.score == max_score]
+
+            # If there's a tie, first player wins (could be randomized)
+            self.winner = winners[0]
+            self.win_type = "score"
+            self.status = Game.GAMEOVER
+            return self.winner
+
+        return None
 
     def get_next_player(self) -> Player:  # type: ignore
         remaining_players = self.get_players_in_play()
@@ -179,3 +216,63 @@ class Game:
             for col_idx, value in enumerate(row):
                 if value == 1:
                     self.grid[grid_y + row_idx][grid_x + col_idx] = player.value
+
+    # ===== RL/Programmatic Interface Methods =====
+
+    def get_observation(self) -> dict:
+        """
+        Returns the current game state as an observation dictionary.
+        Suitable for RL agents to receive state information.
+        """
+        return {
+            "grid": [row[:] for row in self.grid],  # Copy of grid
+            "current_player_idx": self.players.index(self.current_player),
+            "scores": [player.score for player in self.players],
+            "current_piece": (
+                self.current_piece if hasattr(self, "current_piece") else None
+            ),
+            "is_game_over": self.status == Game.GAMEOVER,
+            "winner_idx": self.players.index(self.winner) if self.winner else None,
+            "win_type": self.win_type,  # 'path', 'score', or None
+        }
+
+    def execute_action(self, action: int) -> tuple[bool, str]:
+        """
+        Executes an action on the current piece or player state.
+        Returns True if action was valid and executed, False otherwise.
+        """
+        from game_env import Actions
+
+        # if action == Actions.ACTION_PASS:  # pass/give_up
+        #     self.give_up_and_check(self.current_player)
+        #     self.current_player = self.get_next_player()
+        #     self.set_current_piece(self.current_player.next_piece())
+        #     return True, "PASS"
+
+        if not hasattr(self, "current_piece"):
+            return False, "INVALID"
+
+        if action == Actions.ACTION_CYCLE_PIECE:  # select next piece
+            self.set_current_piece(self.current_player.next_piece())
+            return True, "CYCLE"
+        elif action == Actions.ACTION_MOVE_LEFT:  # move_left
+            return self.move_piece_left(self.current_piece), "MOVE"
+        elif action == Actions.ACTION_MOVE_RIGHT:  # move_right
+            return self.move_piece_right(self.current_piece), "MOVE"
+        elif action == Actions.ACTION_ROTATE:  # rotate
+            return self.rotate_piece(self.current_piece), "CHANGE"
+        elif action == Actions.ACTION_FLIP:  # flip horizontally
+            return self.flip_piece(self.current_piece), "CHANGE"
+        elif action == Actions.ACTION_DROP:  # drop
+            success = self.play_drop_piece(self.current_piece, self.current_player)
+            if success:
+                self.current_player = self.get_next_player()
+                self.set_current_piece(self.current_player.next_piece())
+                return success, "DROP"
+        return False, "INVALID"
+
+    def reset_piece_position(self):
+        """Reset the current piece to starting position (x=0, y=0)."""
+        if hasattr(self, "current_piece"):
+            self.current_piece.x = 0
+            self.current_piece.y = 0
