@@ -41,6 +41,7 @@ class PyLinkxEnv(gym.Env):
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.step_count = 0
+        self.valid_action= True
         self.game = Game()
 
         # Action space: 7 discrete actions (0-6)
@@ -52,7 +53,7 @@ class PyLinkxEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(26,), dtype=np.float32),
+                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(27,), dtype=np.float32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -71,6 +72,7 @@ class PyLinkxEnv(gym.Env):
         self.steps_for_current_turn = 0
         self.max_steps_by_turn = 30
         self.last_scores = [0, 0]
+        self.valid_action = True
 
         # Initialize first piece
         self._initialize_next_piece()
@@ -102,23 +104,23 @@ class PyLinkxEnv(gym.Env):
         if action == Actions.ACTION_DROP:
             self.steps_for_current_turn = 0  # Reset turn step count on drop
         # Execute the action
-        action_valid, action_type = self.game.execute_action(action)
-        if not action_valid and self.render_mode == "debug":
+        self.valid_action, action_type = self.game.execute_action(action)
+        if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
         self.game.update()
         
         # Check if game is over
-        terminated = self.game.status == Game.GAMEOVER or not action_valid
+        terminated = self.game.status == Game.GAMEOVER or not self.valid_action
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
         reward = self._calculate_reward(
-            player_idx, action_valid, action_type, terminated
+            player_idx, self.valid_action, action_type, terminated
         )
 
         # Get next observation
         observation = self._get_observation()
-        info = self._get_info(action_valid)
+        info = self._get_info(self.valid_action)
 
         return observation, reward, terminated, False, info
 
@@ -181,14 +183,16 @@ class PyLinkxEnv(gym.Env):
                 float(current_piece.x) / self.game.GRID_SIZE,  # Normalize x position
                 float(current_piece.y) / self.game.GRID_SIZE,  # Normalize y position
                 float(
-                    self.game.ghost_grid_y if self.game.ghost_grid_y else -1
+                    self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1
                 ),  # -1 if no ghost piece
                 current_piece_id,  # Categorical encoding of piece type
                 remaining_ratio,  # Percentage of pieces left
-                float(1.0 if self.game.ghost_grid_y else 0.0),
-                float(self.game.current_player.score)
-                / (self.game.GRID_SIZE * self.game.GRID_SIZE),  # Normalize score
-                float(self.game.status == Game.GAMEOVER),  # Game state flag
+                float(1.0 if self.game.ghost_grid_y else 0.0), # Ghost piece presence flag
+                # float(self.game.current_player.score)
+                # / (self.game.GRID_SIZE * self.game.GRID_SIZE),  # Normalize score
+                float(0), #neutralize score for now
+                float(self.game.status == Game.GAMEOVER),  # Game state flag,
+                float(self.valid_action),  # Action validity flag
             ],
             dtype=np.float32,
         )
@@ -235,9 +239,9 @@ class PyLinkxEnv(gym.Env):
             ):
                 # Player won
                 if self.game.win_type == "path":
-                    return 200.0  # Higher reward for path-finding victory
+                    return 2000.0  # Higher reward for path-finding victory
                 else:
-                    return 150.0  # Standard reward for score-based victory
+                    return 1500.0  # Standard reward for score-based victory
             if not action_valid:
                 return -50.0  # Heavier penalty for losing due to invalid action
         # In play rewards/penalties

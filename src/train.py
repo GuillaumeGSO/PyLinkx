@@ -63,7 +63,7 @@ def train_agent(
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path="./models/",
-        eval_freq=2000,
+        eval_freq=5000,
         n_eval_episodes=eval_episodes,
         deterministic=True,
     )
@@ -81,7 +81,7 @@ def train_agent(
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.015,
+        ent_coef=0.02,
     )
 
     print("\n3. Starting training...")
