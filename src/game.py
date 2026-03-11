@@ -2,7 +2,7 @@
 import random
 from enum import IntEnum
 from player import Player
-from piece import Piece
+from piece import Piece, rotate_shape, flip_shape
 
 
 class Actions(IntEnum):
@@ -39,6 +39,7 @@ class Game:
         self.winner = None
         self.win_type = None  # 'path' or 'score'
         self.ghost_grid_y = None
+        self.one_extra_turn_remaining = False
 
     def __repr__(self) -> str:
         rows = "\n".join(str(row) for row in self.grid)
@@ -59,11 +60,26 @@ class Game:
         if self.ghost_grid_y is not None:
             self.place_piece_on_grid(piece, piece.x, self.ghost_grid_y, player)
             self.current_player.drop_piece(piece)
+
+            gave_up = False
             if not self.current_player.has_pieces():
                 self.current_player.give_up()
-            self.winner = self.check_for_winner()
-            if self.winner or len(self.get_players_in_play()) == 0:
+                gave_up = True
+
+            if self.one_extra_turn_remaining:
+                # Bonus turn just used — end game (path win has priority)
+                self.winner = self.check_for_winner()
+                if not self.winner:
+                    self._declare_score_winner()
                 self.status = Game.GAMEOVER
+            else:
+                self.winner = self.check_for_winner()
+                if self.winner or not self.get_players_in_play():
+                    self.status = Game.GAMEOVER
+                elif gave_up and self.get_players_in_play():
+                    # Player just exhausted; give opponent one extra turn
+                    self.one_extra_turn_remaining = True
+
             return True
         return False
 
@@ -120,7 +136,16 @@ class Game:
         self.update_scores()
         self.winner = self.check_for_winner()
 
+    def _declare_score_winner(self):
+        self.update_scores()
+        max_score = max(p.score for p in self.players)
+        self.winner = next(p for p in self.players if p.score == max_score)
+        self.win_type = "score"
+        self.status = Game.GAMEOVER
+
     def check_for_winner(self):
+        if self.status == Game.GAMEOVER:
+            return self.winner
         # First, check for path-finding win (higher reward)
         for player in self.players:
             if player.check_if_winner(self.grid):
@@ -211,6 +236,25 @@ class Game:
         # If we checked all columns and none returned False, the whole piece is supported
         return True
 
+    def player_has_valid_moves(self, player: Player) -> bool:
+        for piece in player.pieces:
+            orig_shape, orig_x = piece.shape, piece.x
+            seen, shape = set(), orig_shape
+            for _ in range(4):
+                for candidate in [shape, flip_shape(shape)]:
+                    key = tuple(tuple(r) for r in candidate)
+                    if key not in seen:
+                        seen.add(key)
+                        piece.shape = candidate
+                        for x in range(self.GRID_SIZE - len(candidate[0]) + 1):
+                            piece.x = x
+                            if self.calculate_ghost_position(piece) is not None:
+                                piece.shape, piece.x = orig_shape, orig_x
+                                return True
+                shape = rotate_shape(shape)
+            piece.shape, piece.x = orig_shape, orig_x
+        return False
+
     def place_piece_on_grid(self, piece, grid_x, grid_y, player: Player):
         for row_idx, row in enumerate(piece.shape):
             for col_idx, value in enumerate(row):
@@ -275,9 +319,27 @@ class Game:
         return success, action_type
 
     def start_turn(self):
-        """Set up the current player's next piece to begin their turn."""
+        """Set up the current player's next piece to begin their turn.
+
+        Auto-passes a player who is blocked (has pieces but no valid placement),
+        granting the opponent one extra turn. Recursion is bounded by GAMEOVER.
+        """
+        if self.status == Game.GAMEOVER:
+            return
+
         next_piece = self.current_player.next_piece()
         if next_piece:
             self.set_current_piece(next_piece)
+            if not self.player_has_valid_moves(self.current_player):
+                self.current_player.give_up()
+                remaining = self.get_players_in_play()
+                if not remaining:
+                    self.winner = self.check_for_winner()
+                elif self.one_extra_turn_remaining:
+                    self._declare_score_winner()
+                else:
+                    self.one_extra_turn_remaining = True
+                    self.current_player = self.get_next_player()
+                    self.start_turn()
         else:
             self.current_player.give_up()
