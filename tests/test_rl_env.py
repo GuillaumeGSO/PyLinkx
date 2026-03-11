@@ -27,7 +27,7 @@ class TestPyLinkxEnvInitialization:
         env = PyLinkxEnv()
         assert isinstance(env.observation_space, Dict)
         assert env.observation_space["grid"].shape == (9, 9, 1)
-        assert env.observation_space["grid"].dtype == np.int8
+        assert env.observation_space["grid"].dtype == np.float32
         assert env.observation_space["scalars"].shape == (27,)
         assert env.observation_space["scalars"].dtype == np.float32
 
@@ -151,7 +151,7 @@ class TestPyLinkxEnvGameState:
         env.reset()
 
         obs = env._get_observation()
-        grid_array = np.array(env.game.grid, dtype=np.int8)
+        grid_array = np.array(env.game.grid, dtype=np.float32) / 2.0
         grid_array = np.expand_dims(grid_array, axis=-1)
 
         assert np.array_equal(obs["grid"], grid_array)

@@ -36,14 +36,14 @@ class PyLinkxEnv(gym.Env):
         self.action_space = spaces.Discrete(len(Actions))
 
         # Observation space: grid (9x9, 1 channel) + 27 scalar features
-        # Grid: 9x9 cells with values [0=empty, 1=player1, 2=player2]
-        # Scalars: player value, piece x/y, ghost y, piece id, remaining ratio,
-        #          ghost flag, score placeholder, game over flag, action validity,
+        # Grid: 9x9 cells with values normalized to [0.0, 0.5, 1.0]
+        # Scalars: player value, piece x, scores, ghost y, piece id, remaining ratio,
+        #          ghost flag, game over flag, action validity,
         #          remaining turn ratio, padded piece shape (4x4=16)
         self.observation_space = spaces.Dict(
             {
-                "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(27,), dtype=np.float32),
+                "grid": spaces.Box(low=0.0, high=1.0, shape=(9, 9, 1), dtype=np.float32),
+                "scalars": spaces.Box(low=-1.0, high=1.0, shape=(27,), dtype=np.float32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -63,6 +63,7 @@ class PyLinkxEnv(gym.Env):
         self.max_steps_by_turn = 30
         self.last_scores = [0, 0]
         self.valid_action = True
+        self._score_delta = 0.0
 
         # Initialize first piece
         self.game.start_turn()
@@ -93,18 +94,22 @@ class PyLinkxEnv(gym.Env):
                 print("Max steps for turn reached. Forcing drop action.")
         if action == Actions.ACTION_DROP:
             self.steps_for_current_turn = 0  # Reset turn step count on drop
+        # Capture pre-action state for reward shaping
+        acting_player_idx = self.game.players.index(self.game.current_player)
+        old_score = self.game.players[acting_player_idx].score
         # Execute the action (update() is called inside execute_action)
         self.valid_action, action_type = self.game.execute_action(action)
+        self._score_delta = self.game.players[acting_player_idx].score - old_score
         if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
         
-        # Check if game is over
-        terminated = self.game.status == Game.GAMEOVER or not self.valid_action
+        # Check if game is over (invalid action no longer terminates episode)
+        terminated = self.game.status == Game.GAMEOVER
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
         reward = self._calculate_reward(
-            player_idx, self.valid_action, action_type, terminated
+            player_idx, self.valid_action, action_type, terminated, self._score_delta
         )
 
         # Get next observation
@@ -136,27 +141,30 @@ class PyLinkxEnv(gym.Env):
         Captures the grid for pathfinding (border connection)
         and scalars for the current game state.
         """
-        # 1. Grid (9, 9, 1) - Crucial for the "Border Connection" win condition
+        # 1. Grid (9, 9, 1) - Normalized to [0.0, 0.5, 1.0]
         # The CNN will learn to detect 'chains' of 1s or 2s across the grid.
-        grid_array = np.array(self.game.grid, dtype=np.int8)
+        grid_array = np.array(self.game.grid, dtype=np.float32) / 2.0
         grid_array = np.expand_dims(grid_array, axis=-1)
 
         # 2. Contextual Scalars
         current_piece = self.game.current_piece
+        nb_players = len(self.game.players)
         max_pieces = 2 * len(self.PIECE_MAP)
         current_piece_id = float(self.PIECE_MAP[current_piece.shape_name]) / len(self.PIECE_MAP)
         remaining_ratio = float(len(self.game.current_player.pieces)) / max_pieces
+        grid_cells = float(self.game.GRID_SIZE * self.game.GRID_SIZE)
+        player_scores = [float(p.score) / grid_cells for p in self.game.players]
 
         other_scalars = np.array(
             [
-                float(self.game.current_player.value),  # Player's cell value in the grid
+                float(self.game.current_player.value - 1) / (nb_players - 1),  # Normalized to [0, 1]
                 float(current_piece.x) / self.game.GRID_SIZE,  # Normalized x position
-                float(current_piece.y) / self.game.GRID_SIZE,  # Normalized y position
+                player_scores[0],  # Player 1 score normalized
                 float(self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1),  # -1 if no valid drop
                 current_piece_id,  # Normalized piece type id
                 remaining_ratio,  # Fraction of pieces remaining
                 float(1.0 if self.game.ghost_grid_y else 0.0),  # Ghost piece presence flag
-                float(0),  # Score placeholder (neutralized)
+                player_scores[1],  # Player 2 score normalized
                 float(self.game.status == Game.GAMEOVER),  # Game over flag
                 float(self.valid_action),  # Last action validity
             ],
@@ -191,13 +199,15 @@ class PyLinkxEnv(gym.Env):
         }
 
     def _calculate_reward(
-        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool
+        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool, score_delta: float = 0.0
     ) -> float:
         """
         Calculate reward for the current action.
 
         Path-finding wins are more valuable as they require strategic placement.
         """
+        if not action_valid:
+            return -50.0  # Penalty for invalid action (does not terminate episode)
         if terminated:
             if (
                 self.game.winner
@@ -208,11 +218,9 @@ class PyLinkxEnv(gym.Env):
                     return 2000.0  # Higher reward for path-finding victory
                 else:
                     return 1500.0  # Standard reward for score-based victory
-            if not action_valid:
-                return -50.0  # Heavier penalty for losing due to invalid action
         # In play rewards/penalties
-        if action_valid and action_type == "DROP":
-            return 10 # Encourage piece placement
+        if action_type == "DROP":
+            return 10 + 0.5 * score_delta  # Encourage placement + reward area growth
         return -0.1
 
     def close(self):

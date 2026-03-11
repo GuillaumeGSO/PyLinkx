@@ -54,7 +54,7 @@ def train_agent(
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
-    env = make_vec_env(PyLinkxEnv, n_envs=n_envs)
+    env = make_vec_env(PyLinkxEnv, n_envs=n_envs, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
 
     # Create evaluation environment
     eval_env = Monitor(PyLinkxEnv(max_steps=max_steps))  # Wrap with Monitor for logging
@@ -78,7 +78,7 @@ def train_agent(
         n_steps=2048,
         batch_size=128,
         n_epochs=10,
-        gamma=0.99,
+        gamma=0.999,
         gae_lambda=0.95,
         clip_range=0.2,
         ent_coef=0.02,
