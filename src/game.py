@@ -41,9 +41,8 @@ class Game:
         self.ghost_grid_y = None
 
     def __repr__(self) -> str:
-        for row in self.grid:
-            print(row)
-        return f"Game State: ${self.status}"
+        rows = "\n".join(str(row) for row in self.grid)
+        return f"Game State: {self.status}\n{rows}"
 
     def set_current_piece(self, piece: Piece | None):
         if piece is None:
@@ -53,7 +52,7 @@ class Game:
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
 
     def get_players_in_play(self):
-        return [player for player in self.players if not player.has_gave_up]
+        return [player for player in self.players if not player.has_given_up]
 
     def play_drop_piece(self, piece: Piece, player: Player):
         self.ghost_grid_y = self.calculate_ghost_position(piece)
@@ -81,7 +80,7 @@ class Game:
         return False
 
     def rotate_piece(self, piece: Piece) -> bool:
-        if piece.shape_name in ["u"]:
+        if piece.shape_name == "u":
             return False
         piece.rotate()
         # Ensure the piece doesn't go out of bounds after rotation
@@ -117,8 +116,6 @@ class Game:
         return ghost_grid_y
 
     def update(self):
-        # print("Updating game state...")
-        # print(self)
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
         self.update_scores()
         self.winner = self.check_for_winner()
@@ -158,7 +155,7 @@ class Game:
         for p in range(len(self.players)):
             if self.players[p] == self.current_player:
                 next_index = (p + 1) % len(self.players)
-                while self.players[next_index].has_gave_up:
+                while self.players[next_index].has_given_up:
                     next_index = (next_index + 1) % len(self.players)
                 return self.players[next_index]
 

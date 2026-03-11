@@ -3,7 +3,6 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import pygame
-import random
 from game import Game, Actions
 from game_renderer import GameRenderer
 
@@ -17,6 +16,7 @@ class PyLinkxEnv(gym.Env):
     """
 
     metadata = {"render_modes": ["debug"], "render_fps": 8}
+    PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
 
     def __init__(self, render_mode=None, max_steps=500):
         """
@@ -29,15 +29,17 @@ class PyLinkxEnv(gym.Env):
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.step_count = 0
-        self.valid_action= True
+        self.valid_action = True
         self.game = Game()
 
-        # Action space: 7 discrete actions (0-6)
+        # Action space: 6 discrete actions (0-5)
         self.action_space = spaces.Discrete(len(Actions))
 
-        # Observation space: grid (9x9) + 4 scalar features
-        # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
-        # Scalars: [current_player_idx, player1_score, player2_score, is_game_over] -> to be updated
+        # Observation space: grid (9x9, 1 channel) + 27 scalar features
+        # Grid: 9x9 cells with values [0=empty, 1=player1, 2=player2]
+        # Scalars: player value, piece x/y, ghost y, piece id, remaining ratio,
+        #          ghost flag, score placeholder, game over flag, action validity,
+        #          remaining turn ratio, padded piece shape (4x4=16)
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
@@ -88,7 +90,7 @@ class PyLinkxEnv(gym.Env):
         if self.steps_for_current_turn >= self.max_steps_by_turn:
             action = Actions.ACTION_DROP  # Force drop to end turn
             if self.render_mode == "debug":
-                print(f"Max steps for turn reached. Forcing drop action.")
+                print("Max steps for turn reached. Forcing drop action.")
         if action == Actions.ACTION_DROP:
             self.steps_for_current_turn = 0  # Reset turn step count on drop
         # Execute the action (update() is called inside execute_action)
@@ -119,10 +121,6 @@ class PyLinkxEnv(gym.Env):
                 pygame.display.flip()
 
             print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'}")
-            # print(f"Grid:\n")
-            # print(self.game.grid)
-            # print(f"Action: {action}")
-            # print(f"Scores: {[p.score for p in self.game.players]}")
 
     def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
         """Pads any piece shape into a fixed 4x4 array."""
@@ -145,42 +143,33 @@ class PyLinkxEnv(gym.Env):
 
         # 2. Contextual Scalars
         current_piece = self.game.current_piece
-        piece_map = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
-        max_pieces = 2 * len(piece_map)  # move this logic to game
-        current_piece_id = float(piece_map[current_piece.shape_name]) / len(
-            piece_map
-        )  # Normalised
+        max_pieces = 2 * len(self.PIECE_MAP)
+        current_piece_id = float(self.PIECE_MAP[current_piece.shape_name]) / len(self.PIECE_MAP)
         remaining_ratio = float(len(self.game.current_player.pieces)) / max_pieces
 
         other_scalars = np.array(
             [
-                float(
-                    self.game.current_player.value
-                ),  # Allow player to know its value in the grid
-                float(current_piece.x) / self.game.GRID_SIZE,  # Normalize x position
-                float(current_piece.y) / self.game.GRID_SIZE,  # Normalize y position
-                float(
-                    self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1
-                ),  # -1 if no ghost piece
-                current_piece_id,  # Categorical encoding of piece type
-                remaining_ratio,  # Percentage of pieces left
-                float(1.0 if self.game.ghost_grid_y else 0.0), # Ghost piece presence flag
-                # float(self.game.current_player.score)
-                # / (self.game.GRID_SIZE * self.game.GRID_SIZE),  # Normalize score
-                float(0), #neutralize score for now
-                float(self.game.status == Game.GAMEOVER),  # Game state flag,
-                float(self.valid_action),  # Action validity flag
+                float(self.game.current_player.value),  # Player's cell value in the grid
+                float(current_piece.x) / self.game.GRID_SIZE,  # Normalized x position
+                float(current_piece.y) / self.game.GRID_SIZE,  # Normalized y position
+                float(self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1),  # -1 if no valid drop
+                current_piece_id,  # Normalized piece type id
+                remaining_ratio,  # Fraction of pieces remaining
+                float(1.0 if self.game.ghost_grid_y else 0.0),  # Ghost piece presence flag
+                float(0),  # Score placeholder (neutralized)
+                float(self.game.status == Game.GAMEOVER),  # Game over flag
+                float(self.valid_action),  # Last action validity
             ],
             dtype=np.float32,
         )
-        # 2. Get your 16-element shape array
+        # 3. Padded piece shape (4x4 = 16 values)
         shape_vals = self._get_padded_shape(current_piece.shape)
 
         remaining_actions_ratio = (self.max_steps_by_turn - self.steps_for_current_turn) / self.max_steps_by_turn
 
-        # 3. Use concatenate to merge them into a single (25,) array
+        # Concatenate into a single (27,) array: 10 scalars + 1 ratio + 16 shape
         scalars = np.concatenate([
-            np.array(other_scalars, dtype=np.float32), 
+            other_scalars,
             [remaining_actions_ratio],
             shape_vals
         ])
@@ -229,9 +218,3 @@ class PyLinkxEnv(gym.Env):
     def close(self):
         """Clean up resources."""
         pass
-
-    def seed(self, seed=None):
-        """Set the random seed."""
-        random.seed(seed)
-        np.random.seed(seed)
-        return [seed]
