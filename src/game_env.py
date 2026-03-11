@@ -17,7 +17,7 @@ class Actions(IntEnum):
     ACTION_ROTATE = 3
     ACTION_FLIP = 4
     ACTION_DROP = 5
-    # ACTION_PASS = 6
+    ACTION_PASS = 6
 
 
 class PyLinkxEnv(gym.Env):
@@ -28,9 +28,9 @@ class PyLinkxEnv(gym.Env):
     Supports both training and evaluation.
     """
 
-    metadata = {"render_modes": ["debug"], "render_fps": 8}
+    metadata = {"render_fps": 12}
 
-    def __init__(self, render_mode=None, max_steps=500):
+    def __init__(self, render_mode=None, max_steps=200):
         """
         Initialize the PyLinkx Gymnasium environment.
 
@@ -41,8 +41,16 @@ class PyLinkxEnv(gym.Env):
         self.render_mode = render_mode
         self.max_steps = max_steps
         self.step_count = 0
-        self.valid_action= True
         self.game = Game()
+        self.renderer = None
+
+        pygame.init()
+        screen = pygame.display.set_mode(
+            (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
+        )
+        pygame.display.set_caption("PyLinkx RL Environment - Debug Render")
+        self.renderer = GameRenderer(screen, self.game)
+        self.clock = pygame.time.Clock()
 
         # Action space: 7 discrete actions (0-6)
         self.action_space = spaces.Discrete(len(Actions))
@@ -53,10 +61,16 @@ class PyLinkxEnv(gym.Env):
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(27,), dtype=np.float32),
+                "scalars": spaces.Box(low=-1, high=1, shape=(23,), dtype=np.float32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
+
+    def valid_action_mask(self) -> np.ndarray:
+        # Call the logic already defined in your Game class
+        # Ensure it returns a numpy array of type np.int8
+        mask = self.game.get_valid_actions(self.action_space.n) 
+        return np.array(mask, dtype=np.int8)
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         """
@@ -70,9 +84,8 @@ class PyLinkxEnv(gym.Env):
         self.game.reset()
         self.step_count = 0
         self.steps_for_current_turn = 0
-        self.max_steps_by_turn = 30
+        self.max_steps_by_turn = 20 # Max steps allowed for a single turn before forcing a pass
         self.last_scores = [0, 0]
-        self.valid_action = True
 
         # Initialize first piece
         self._initialize_next_piece()
@@ -98,44 +111,36 @@ class PyLinkxEnv(gym.Env):
         self.steps_for_current_turn += 1
 
         if self.steps_for_current_turn >= self.max_steps_by_turn:
-            action = Actions.ACTION_DROP  # Force drop to end turn
+            action = Actions.ACTION_PASS  # Force pass to end turn
             if self.render_mode == "debug":
-                print(f"Max steps for turn reached. Forcing drop action.")
-        if action == Actions.ACTION_DROP:
+                print(f"Max steps for turn reached. Forcing pass action.")
+        if action == Actions.ACTION_PASS:
             self.steps_for_current_turn = 0  # Reset turn step count on drop
         # Execute the action
-        self.valid_action, action_type = self.game.execute_action(action)
-        if not self.valid_action and self.render_mode == "debug":
-            print(f"Invalid action {Actions(action).name}")
+        self.game.execute_action(action)
         self.game.update()
         
         # Check if game is over
-        terminated = self.game.status == Game.GAMEOVER or not self.valid_action
+        terminated = self.game.status == Game.GAMEOVER
 
         # Calculate reward
         player_idx = self.game.players.index(self.game.current_player)
         reward = self._calculate_reward(
-            player_idx, self.valid_action, action_type, terminated
+            player_idx, action, terminated
         )
 
         # Get next observation
         observation = self._get_observation()
-        info = self._get_info(self.valid_action)
+        info = self._get_info()
 
         return observation, reward, terminated, False, info
 
-    def render(self, renderer=None, action=Actions|None):
+    def render(self):
         """Render the current game state."""
-        if self.render_mode == "debug":
-            if renderer:
-                renderer.draw()
-                pygame.display.flip()
-
-            print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'}")
-            # print(f"Grid:\n")
-            # print(self.game.grid)
-            # print(f"Action: {action}")
-            # print(f"Scores: {[p.score for p in self.game.players]}")
+        if self.render_mode == "human":
+            self.clock.tick(self.metadata["render_fps"]) if self.clock else None
+            self.renderer.draw()
+            pygame.display.flip()
 
     # SHOULD NOT BE HERE; move to game logic
     def _initialize_next_piece(self):
@@ -182,17 +187,9 @@ class PyLinkxEnv(gym.Env):
                 ),  # Allow player to know its value in the grid
                 float(current_piece.x) / self.game.GRID_SIZE,  # Normalize x position
                 float(current_piece.y) / self.game.GRID_SIZE,  # Normalize y position
-                float(
-                    self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1
-                ),  # -1 if no ghost piece
                 current_piece_id,  # Categorical encoding of piece type
                 remaining_ratio,  # Percentage of pieces left
-                float(1.0 if self.game.ghost_grid_y else 0.0), # Ghost piece presence flag
-                # float(self.game.current_player.score)
-                # / (self.game.GRID_SIZE * self.game.GRID_SIZE),  # Normalize score
-                float(0), #neutralize score for now
                 float(self.game.status == Game.GAMEOVER),  # Game state flag,
-                float(self.valid_action),  # Action validity flag
             ],
             dtype=np.float32,
         )
@@ -210,7 +207,7 @@ class PyLinkxEnv(gym.Env):
 
         return {"grid": grid_array, "scalars": scalars}
 
-    def _get_info(self, action_valid=None) -> dict:
+    def _get_info(self) -> dict:
         """Get additional information about the environment state."""
         return {
             "current_player_idx": self.game.players.index(self.game.current_player),
@@ -221,17 +218,19 @@ class PyLinkxEnv(gym.Env):
             ),
             "win_type": self.game.win_type,  # 'path' or 'score' or None
             "step_count": self.step_count,
-            "action_valid": action_valid,
         }
 
     def _calculate_reward(
-        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool
+        self, player_idx: int, action: int, terminated: bool
     ) -> float:
         """
         Calculate reward for the current action.
 
         Path-finding wins are more valuable as they require strategic placement.
         """
+        if action == Actions.ACTION_PASS:
+                return -100.0  # Large negative reward for giving up
+        
         if terminated:
             if (
                 self.game.winner
@@ -242,11 +241,9 @@ class PyLinkxEnv(gym.Env):
                     return 2000.0  # Higher reward for path-finding victory
                 else:
                     return 1500.0  # Standard reward for score-based victory
-            if not action_valid:
-                return -50.0  # Heavier penalty for losing due to invalid action
-        # In play rewards/penalties
-        if action_valid and action_type == "DROP":
-            return 10 # Encourage piece placement
+        
+        if action == Actions.ACTION_DROP:
+            return 5.0  # Small reward for successfully dropping a piece
         return -0.1
 
     def close(self):

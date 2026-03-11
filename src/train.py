@@ -9,12 +9,15 @@ This script demonstrates how to:
 4. Evaluate agent performance
 """
 
-import random
 import numpy as np
 import sys
 from pathlib import Path
 import pygame
 from stable_baselines3.common.monitor import Monitor
+from sb3_contrib.common.wrappers import ActionMasker
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.maskable.callbacks import MaskableEvalCallback
+from stable_baselines3.common.vec_env.base_vec_env import VecEnv
 
 # Add parent directory to path for relative imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -28,12 +31,18 @@ from stable_baselines3.common.callbacks import EvalCallback
 from game_env import Actions, PyLinkxEnv
 
 
+
+def mask_fn(env: VecEnv) -> np.ndarray:
+    return env.get_wrapper_attr("valid_action_mask")()
+
+
+
 def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
     max_steps: int = 100,
     envs: int = 4,
-    model_save_path: str = "models/ppo_pylinkx.zip",
+    model_save_path: str = "models/ppo_pylinkx.zip"
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -54,25 +63,35 @@ def train_agent(
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
-    env = make_vec_env(PyLinkxEnv, n_envs=n_envs)
+    train_env: VecEnv = make_vec_env(
+                                PyLinkxEnv, 
+                                n_envs=n_envs, 
+                                wrapper_class=ActionMasker,
+                                wrapper_kwargs={"action_mask_fn": mask_fn},
+                                env_kwargs={"render_mode": None, "max_steps": max_steps}
+                            )
 
     # Create evaluation environment
-    eval_env = Monitor(PyLinkxEnv(max_steps=max_steps))  # Wrap with Monitor for logging
+    raw_eval_env = PyLinkxEnv(max_steps=max_steps, render_mode="human")
+    
+    # Wrap with action mask and monitor for evaluation
+    eval_env = ActionMasker(raw_eval_env, mask_fn)
+    eval_env = Monitor(eval_env)
 
     # Setup evaluation callback
-    eval_callback = EvalCallback(
-        eval_env,
-        best_model_save_path="./models/",
-        eval_freq=5000,
-        n_eval_episodes=eval_episodes,
-        deterministic=True,
-    )
+    eval_callback = MaskableEvalCallback(
+    eval_env,
+    best_model_save_path="./models/",
+    eval_freq=100_000 // n_envs,
+    n_eval_episodes=1,
+    deterministic=True,
+    render=True)
 
     # Create and train the agent
     print("2. Creating PPO agent...")
-    model = PPO(
+    model = MaskablePPO(
         "MultiInputPolicy",  # Multi-layer perceptron policy
-        env,
+        train_env,
         verbose=1,
         learning_rate=3e-4,
         n_steps=2048,
@@ -81,7 +100,7 @@ def train_agent(
         gamma=0.99,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.02,
+        ent_coef=0.1,
     )
 
     print("\n3. Starting training...")
@@ -103,7 +122,7 @@ def train_agent(
     model.save(model_save_path)
     print("   Model saved!")
 
-    env.close()
+    train_env.close()
 
     return model
 
@@ -125,10 +144,10 @@ def evaluate_agent(
 
     # Load the trained model
     print(f"\n1. Loading model from {model_path}...")
-    model = PPO.load(model_path)
+    model = MaskablePPO.load(model_path)
 
     # Create evaluation environment
-    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps)
+    env = PyLinkxEnv(render_mode="human" if render else None, max_steps=max_steps)
 
     episode_rewards = []
     episode_lengths = []
@@ -158,18 +177,13 @@ def evaluate_agent(
         ep_p2_turns = 0
 
         while not done:
+            action_mask = env.get_wrapper_attr("valid_action_mask")()
             current_player = info["current_player_idx"]
             if current_player == 0:  # Agent plays as player 1
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=True, action_masks=action_mask)
                 ep_p1_turns += 1
             else:
-                # Player 2 try to drop 50% of the time,takes random actions
-                # if random.random() < 0.5:
-                #     action = Actions.ACTION_DROP
-                # else:
-                #     action = env.action_space.sample()
-                
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=True, action_masks=action_mask)
                 ep_p2_turns += 1
 
             env.game.update()
@@ -179,7 +193,7 @@ def evaluate_agent(
             done = terminated or truncated
 
             if render:
-                env.render(renderer, action=int(action))
+                env.render()
                 (
                     clock.tick(env.metadata["render_fps"]) if clock else None
                 )
@@ -241,7 +255,7 @@ def quick_test():
         obs, reward, terminated, truncated, info = env.step(action)
         print(
             f"   Step {step + 1}: player={info['current_player_idx']+1}, action={action}, reward={reward:.2f}, "
-            f"valid={info['action_valid']}, done={terminated or truncated}"
+            f"done={terminated or truncated}"
         )
 
         if terminated or truncated:

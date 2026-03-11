@@ -1,5 +1,8 @@
 # Game logic for PyLinkx
 import random
+
+import numpy as np
+from pygame import mask
 from player import Player
 from piece import Piece
 
@@ -57,18 +60,24 @@ class Game:
                 self.status = Game.GAMEOVER
             return True
         return False
+    
+    def can_move_piece(self, piece: Piece, dx: int) -> bool:
+        new_x = piece.x + dx
+        if new_x < 0 or new_x + piece.width() > self.GRID_SIZE:
+            return False
+        return True
 
     def move_piece_left(self, piece: Piece) -> bool:
-        if piece.x > 0:
+        can_move = self.can_move_piece(piece, dx=-1)
+        if can_move:
             piece.move_left()
-            return True
-        return False
+        return can_move
 
     def move_piece_right(self, piece: Piece) -> bool:
-        if piece.x < self.GRID_SIZE - piece.width():
+        can_move = self.can_move_piece(piece, dx=1)
+        if can_move:
             piece.move_right()
-            return True
-        return False
+        return can_move
 
     def rotate_piece(self, piece: Piece) -> bool:
         if piece.shape_name in ["u"]:
@@ -91,7 +100,7 @@ class Game:
         if self.get_players_in_play() == []:
             self.status = Game.GAMEOVER
 
-    def calculate_ghost_position(self, piece: Piece):
+    def calculate_ghost_position(self, piece: Piece)-> int | None:
         ghost_grid_y = None
         if self.is_valid_move(piece, piece.x, 0):
             for y_test in range(self.GRID_SIZE - piece.height() + 1):
@@ -235,42 +244,78 @@ class Game:
             "winner_idx": self.players.index(self.winner) if self.winner else None,
             "win_type": self.win_type,  # 'path', 'score', or None
         }
-
-    def execute_action(self, action: int) -> tuple[bool, str]:
+    
+    def get_valid_actions(self, num_actions: int) -> np.ndarray:
+        from game_env import Actions
+        mask = np.ones(num_actions, dtype=np.int8)
+        for action in range(num_actions):
+            # We only check 'can' we do it, we don't 'do' it
+            can_do = False
+            if action == Actions.ACTION_CYCLE_PIECE:
+                can_do = True # Usually always valid
+            elif action == Actions.ACTION_MOVE_LEFT:
+                can_do = self.can_move_piece(self.current_piece, dx=-1)
+            elif action == Actions.ACTION_MOVE_RIGHT:
+                can_do = self.can_move_piece(self.current_piece, dx=1)
+            elif action == Actions.ACTION_ROTATE:
+                can_do = self.can_rotate(self.current_piece)
+            elif action == Actions.ACTION_FLIP:
+                can_do = self.can_flip(self.current_piece)
+            elif action == Actions.ACTION_DROP:               
+                can_do = self.ghost_grid_y is not None
+            elif action == Actions.ACTION_PASS:
+                can_do = False
+            
+            if not can_do:
+                mask[action] = 0
+            
+        return mask
+    
+    def can_rotate(self, piece: Piece) -> bool:
+        return piece.shape_name not in ["u"]
+    
+    def can_flip(self, piece: Piece) -> bool:
+        return piece.shape_name in ["L", "S", "c"]
+        
+    def execute_action(self, action: int) -> bool:
         """
         Executes an action on the current piece or player state.
         Returns True if action was valid and executed, False otherwise.
         """
         from game_env import Actions
 
-        # if action == Actions.ACTION_PASS:  # pass/give_up
-        #     self.give_up_and_check(self.current_player)
-        #     self.current_player = self.get_next_player()
-        #     self.set_current_piece(self.current_player.next_piece())
-        #     return True, "PASS"
+        if action == Actions.ACTION_PASS:  # pass/give_up
+            self.give_up_and_check(self.current_player)
+            self.current_player = self.get_next_player()
+            self.set_current_piece(self.current_player.next_piece())
+            return True
 
         if not hasattr(self, "current_piece"):
-            return False, "INVALID"
+            return False
 
         if action == Actions.ACTION_CYCLE_PIECE:  # select next piece
             self.set_current_piece(self.current_player.next_piece())
-            return True, "CYCLE"
-        elif action == Actions.ACTION_MOVE_LEFT:  # move_left
-            return self.move_piece_left(self.current_piece), "MOVE"
-        elif action == Actions.ACTION_MOVE_RIGHT:  # move_right
-            return self.move_piece_right(self.current_piece), "MOVE"
+            return True
+        elif action == Actions.ACTION_MOVE_LEFT:
+            return self.move_piece_left(self.current_piece)
+        elif action == Actions.ACTION_MOVE_RIGHT:
+            return self.move_piece_right(self.current_piece)
         elif action == Actions.ACTION_ROTATE:  # rotate
-            return self.rotate_piece(self.current_piece), "CHANGE"
+            return self.rotate_piece(self.current_piece)
         elif action == Actions.ACTION_FLIP:  # flip horizontally
-            return self.flip_piece(self.current_piece), "CHANGE"
+            return self.flip_piece(self.current_piece)
         elif action == Actions.ACTION_DROP:  # drop
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:
                 self.current_player = self.get_next_player()
                 self.set_current_piece(self.current_player.next_piece())
-                return success, "DROP"
-        return False, "INVALID"
+                return success
+        return False
 
+    def can_move_piece(self, piece: Piece, dx: int) -> bool:
+        new_x = piece.x + dx
+        return self.is_valid_move(piece, new_x, piece.y)
+    
     def reset_piece_position(self):
         """Reset the current piece to starting position (x=0, y=0)."""
         if hasattr(self, "current_piece"):
