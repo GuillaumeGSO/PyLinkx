@@ -92,6 +92,14 @@ All tests should pass. If any fail after a change:
    - `_calculate_reward(player_idx, action_valid, action_type, terminated)` requires all 4 arguments
 4. **Real regression** — fix the source code, then re-run validation.
 
+## Code Style Principles
+
+- **KISS**: Keep solutions simple. Prefer the simplest approach that works.
+- **Single Responsibility**: Each function/class does one thing. Game logic stays in `game.py`; rendering stays in `game_renderer.py`; RL wrapping stays in `game_env.py`.
+- **No over-engineering**: Don't add abstractions, helpers, or configurability for hypothetical future needs. Three similar lines beat a premature abstraction.
+- **SOLID**: Depend on interfaces not implementations. New win conditions or piece types should not require rewriting existing methods.
+- **No speculative features**: Only implement what is explicitly requested. No extra error handling, fallbacks, or validation beyond what's needed at system boundaries.
+
 ## RL Action Space (Actions enum in game.py)
 
 | Value | Name | Effect |
