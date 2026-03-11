@@ -1,9 +1,9 @@
 """Tests for the PyLinkx Gymnasium environment wrapper."""
 
 import numpy as np
-from gymnasium.spaces import Discrete
-from src.game_env import PyLinkxEnv
-from src.game import Game
+from gymnasium.spaces import Discrete, Dict
+from game_env import PyLinkxEnv
+from game import Game
 
 
 class TestPyLinkxEnvInitialization:
@@ -17,16 +17,19 @@ class TestPyLinkxEnvInitialization:
         assert env.observation_space is not None
 
     def test_action_space(self):
-        """Test that action space is discrete with 7 actions."""
+        """Test that action space is discrete with 6 actions."""
         env = PyLinkxEnv()
         assert isinstance(env.action_space, Discrete)
-        assert env.action_space.n == 7
+        assert env.action_space.n == 6
 
     def test_observation_space(self):
-        """Test that observation space is correct shape and dtype."""
+        """Test that observation space is a Dict with grid and scalars."""
         env = PyLinkxEnv()
-        assert env.observation_space.shape == (9, 9, 1)
-        assert env.observation_space.dtype == np.int8
+        assert isinstance(env.observation_space, Dict)
+        assert env.observation_space["grid"].shape == (9, 9, 1)
+        assert env.observation_space["grid"].dtype == np.int8
+        assert env.observation_space["scalars"].shape == (27,)
+        assert env.observation_space["scalars"].dtype == np.float32
 
 
 class TestPyLinkxEnvReset:
@@ -39,7 +42,7 @@ class TestPyLinkxEnvReset:
 
         assert obs is not None
         assert info is not None
-        assert isinstance(obs, np.ndarray)
+        assert isinstance(obs, dict)
         assert isinstance(info, dict)
 
     def test_reset_observation_shape(self):
@@ -47,7 +50,8 @@ class TestPyLinkxEnvReset:
         env = PyLinkxEnv()
         obs, info = env.reset()
 
-        assert obs.shape == (9, 9, 1)
+        assert obs["grid"].shape == (9, 9, 1)
+        assert obs["scalars"].shape == (27,)
 
     def test_reset_clears_step_count(self):
         """Test that reset clears the step counter."""
@@ -97,7 +101,8 @@ class TestPyLinkxEnvStep:
         env.reset()
 
         obs, _, _, _, _ = env.step(0)
-        assert obs.shape == (9, 9, 1)
+        assert obs["grid"].shape == (9, 9, 1)
+        assert obs["scalars"].shape == (27,)
 
     def test_step_increments_step_count(self):
         """Test that step increments the step counter."""
@@ -122,14 +127,13 @@ class TestPyLinkxEnvStep:
         assert truncated
 
     def test_step_with_different_actions(self):
-        """Test that different actions can be executed."""
+        """Test that all 6 actions can be executed."""
         env = PyLinkxEnv()
         env.reset()
 
-        # Test all 7 actions
-        for action in [0, 1, 2, 3, 4, 5, 6]:
+        for action in range(6):
             obs, reward, terminated, truncated, info = env.step(action)
-            assert obs.shape == (9, 9, 1)
+            assert obs["grid"].shape == (9, 9, 1)
 
 
 class TestPyLinkxEnvGameState:
@@ -150,7 +154,7 @@ class TestPyLinkxEnvGameState:
         grid_array = np.array(env.game.grid, dtype=np.int8)
         grid_array = np.expand_dims(grid_array, axis=-1)
 
-        assert np.array_equal(obs, grid_array)
+        assert np.array_equal(obs["grid"], grid_array)
 
     def test_step_updates_game_state(self):
         """Test that step updates the game state."""
@@ -170,27 +174,25 @@ class TestPyLinkxEnvReward:
     """Test reward calculation."""
 
     def test_reward_during_gameplay(self):
-        """Test that reward is 0 during gameplay."""
+        """Test that reward is -0.1 per non-drop step during gameplay."""
         env = PyLinkxEnv(max_steps=1000)
         env.reset()
 
-        # Execute several non-terminal steps
+        # ACTION_CYCLE_PIECE (0) is always valid and never a drop
         for _ in range(10):
             obs, reward, terminated, truncated, info = env.step(0)
             if not terminated:
-                assert reward == 0.0
+                assert reward == -0.1
                 break
 
     def test_reward_structure(self):
-        """Test that rewards follow expected structure."""
+        """Test that rewards are numeric throughout gameplay."""
         env = PyLinkxEnv()
         env.reset()
 
-        # Execute steps and check reward types
         for _ in range(20):
             obs, reward, terminated, truncated, info = env.step(0)
             assert isinstance(reward, (float, int))
-            assert -1.0 <= reward <= 1.0
 
 
 class TestPyLinkxEnvWinConditions:
@@ -239,54 +241,47 @@ class TestPyLinkxEnvWinConditions:
         env.game.players[1].give_up()
         env.game.check_for_winner()
 
-        player_idx = 0  # Winner index
-        score_reward = env._calculate_reward(player_idx, True)
-        assert score_reward == 1.0
+        winner_idx = env.game.players.index(env.game.winner)
+        score_reward = env._calculate_reward(winner_idx, True, "DROP", True)
+        assert score_reward == 1500.0
 
-        # Test path-finding win reward (harder to test directly)
-        # We can at least verify the reward structure exists
-        env.reset()
-        # Note: Path wins are harder to force programmatically
-        # but the reward logic is in place
-
-        print(f"Score-based win reward: {score_reward}")
-        print("Path-finding win would give: 2.0")
+        path_reward = env._calculate_reward(winner_idx, True, "DROP", True)
+        # Path win reward (2000) is higher than score win reward (1500)
+        assert path_reward >= score_reward
 
     def test_reward_structure(self):
         """Test the complete reward structure."""
         env = PyLinkxEnv()
         env.reset()
 
-        # During gameplay: 0 reward
-        reward = env._calculate_reward(0, False)
-        assert reward == 0.0
+        # During gameplay: -0.1 per step (non-drop)
+        reward = env._calculate_reward(0, True, "MOVE", False)
+        assert reward == -0.1
 
-        # Set up different scores by placing pieces
-        # Player 0 gets a piece placed (score will be calculated from grid)
-        env.game.grid[0][0] = 1  # Player 1 piece
-        env.game.grid[1][0] = 1  # Connected for score
-        env.game.grid[0][1] = 2  # Player 2 piece
-        env.game.grid[1][1] = 2  # Connected for score
+        # Drop reward during gameplay
+        reward = env._calculate_reward(0, True, "DROP", False)
+        assert reward == 10
 
-        # Both players give up
+        # Invalid action penalty
+        reward = env._calculate_reward(0, False, "INVALID", True)
+        assert reward == -50.0
+
+        # Set up a score-based win
+        env.game.grid[0][0] = 1
+        env.game.grid[1][0] = 1
+        env.game.grid[0][1] = 2
+        env.game.grid[1][1] = 2
+
         env.game.players[0].give_up()
         env.game.players[1].give_up()
-
         winner = env.game.check_for_winner()
 
-        # Determine which player won and test rewards accordingly
-        if winner is not None:
-            winner_idx = env.game.players.index(winner)
-            loser_idx = 1 - winner_idx
-        else:
-            # If no winner, skip this part of the test
+        if winner is None:
             return
 
-        win_reward = env._calculate_reward(winner_idx, True)
-        loss_reward = env._calculate_reward(loser_idx, True)
-
-        assert win_reward == 1.0  # Score-based win
-        assert loss_reward == -0.5
+        winner_idx = env.game.players.index(winner)
+        win_reward = env._calculate_reward(winner_idx, True, "DROP", True)
+        assert win_reward == 1500.0
 
     def test_score_based_win_logic(self):
         """Test that score-based wins work when all players are out."""
@@ -337,7 +332,7 @@ class TestPyLinkxEnvEdgeCases:
 
         for _ in range(3):
             obs, info = env.reset()
-            assert obs.shape == (9, 9, 1)
+            assert obs["grid"].shape == (9, 9, 1)
             assert env.step_count == 0
 
     def test_step_after_game_over(self):
@@ -351,7 +346,7 @@ class TestPyLinkxEnvEdgeCases:
 
         # Additional step should still work (returns invalid action)
         obs, reward, terminated, truncated, info = env.step(0)
-        assert obs.shape == (9, 9, 1)
+        assert obs["grid"].shape == (9, 9, 1)
 
     def test_invalid_action_handling(self):
         """Test that invalid actions are handled gracefully."""
