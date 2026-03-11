@@ -88,12 +88,12 @@ class PyLinkxEnv(gym.Env):
         self.step_count += 1
         self.steps_for_current_turn += 1
 
-        if self.steps_for_current_turn >= self.max_steps_by_turn:
+        forced_drop = self.steps_for_current_turn >= self.max_steps_by_turn
+        if forced_drop:
             action = Actions.ACTION_DROP  # Force drop to end turn
             if self.render_mode == "debug":
                 print("Max steps for turn reached. Forcing drop action.")
-        if action == Actions.ACTION_DROP:
-            self.steps_for_current_turn = 0  # Reset turn step count on drop
+
         # Capture pre-action state for reward shaping
         acting_player_idx = self.game.players.index(self.game.current_player)
         old_score = self.game.players[acting_player_idx].score
@@ -102,14 +102,24 @@ class PyLinkxEnv(gym.Env):
         self._score_delta = self.game.players[acting_player_idx].score - old_score
         if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
-        
+
+        # If forced drop failed (no valid ghost position), cycle to next piece to unblock
+        if forced_drop and not self.valid_action:
+            self.valid_action, action_type = self.game.execute_action(Actions.ACTION_CYCLE_PIECE)
+            self._score_delta = 0.0
+            if self.render_mode == "debug":
+                print("Forced drop failed, cycling to next piece.")
+
+        # Reset turn counter on successful drop or forced-drop fallback cycle
+        if (action_type == "DROP" and self.valid_action) or (forced_drop and action_type == "CYCLE"):
+            self.steps_for_current_turn = 0
+
         # Check if game is over (invalid action no longer terminates episode)
         terminated = self.game.status == Game.GAMEOVER
 
-        # Calculate reward
-        player_idx = self.game.players.index(self.game.current_player)
+        # Calculate reward using acting player (current_player may have changed after DROP)
         reward = self._calculate_reward(
-            player_idx, self.valid_action, action_type, terminated, self._score_delta
+            acting_player_idx, self.valid_action, action_type, terminated, self._score_delta, forced_drop
         )
 
         # Get next observation
@@ -199,7 +209,7 @@ class PyLinkxEnv(gym.Env):
         }
 
     def _calculate_reward(
-        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool, score_delta: float = 0.0
+        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool, score_delta: float = 0.0, forced_drop: bool = False
     ) -> float:
         """
         Calculate reward for the current action.
@@ -220,7 +230,8 @@ class PyLinkxEnv(gym.Env):
                     return 1500.0  # Standard reward for score-based victory
         # In play rewards/penalties
         if action_type == "DROP":
-            return 10 + 0.5 * score_delta  # Encourage placement + reward area growth
+            base = 10 + 0.5 * score_delta  # Encourage placement + reward area growth
+            return base - 5.0 if forced_drop else base  # Penalize procrastination
         return -0.1
 
     def close(self):
