@@ -1,7 +1,17 @@
 # Game logic for PyLinkx
 import random
+from enum import IntEnum
 from player import Player
 from piece import Piece
+
+
+class Actions(IntEnum):
+    ACTION_CYCLE_PIECE = 0
+    ACTION_MOVE_LEFT = 1
+    ACTION_MOVE_RIGHT = 2
+    ACTION_ROTATE = 3
+    ACTION_FLIP = 4
+    ACTION_DROP = 5
 
 
 class Game:
@@ -157,21 +167,14 @@ class Game:
             player.score = player.calculate_score(self.grid)
 
     def is_valid_move(self, piece: Piece, grid_x, grid_y):
-        shape_cells = set()
-
-        # 1. Bounds & overlap check
         for r, row in enumerate(piece.shape):
             for c, value in enumerate(row):
                 if value == 1:
                     tx, ty = grid_x + c, grid_y + r
-
                     if not (0 <= tx < self.GRID_SIZE and 0 <= ty < self.GRID_SIZE):
                         return False
                     if self.grid[ty][tx] > 0:
                         return False
-
-                    shape_cells.add((tx, ty))
-
         return True
 
     def is_fully_supported(self, piece: Piece, grid_x, grid_y):
@@ -239,40 +242,45 @@ class Game:
     def execute_action(self, action: int) -> tuple[bool, str]:
         """
         Executes an action on the current piece or player state.
-        Returns True if action was valid and executed, False otherwise.
+        Returns (success, action_type). Always calls update() before returning.
         """
-        from game_env import Actions
-
-        # if action == Actions.ACTION_PASS:  # pass/give_up
-        #     self.give_up_and_check(self.current_player)
-        #     self.current_player = self.get_next_player()
-        #     self.set_current_piece(self.current_player.next_piece())
-        #     return True, "PASS"
-
         if not hasattr(self, "current_piece"):
             return False, "INVALID"
 
-        if action == Actions.ACTION_CYCLE_PIECE:  # select next piece
+        success = True
+        action_type = "INVALID"
+
+        if action == Actions.ACTION_CYCLE_PIECE:
             self.set_current_piece(self.current_player.next_piece())
-            return True, "CYCLE"
-        elif action == Actions.ACTION_MOVE_LEFT:  # move_left
-            return self.move_piece_left(self.current_piece), "MOVE"
-        elif action == Actions.ACTION_MOVE_RIGHT:  # move_right
-            return self.move_piece_right(self.current_piece), "MOVE"
-        elif action == Actions.ACTION_ROTATE:  # rotate
-            return self.rotate_piece(self.current_piece), "CHANGE"
-        elif action == Actions.ACTION_FLIP:  # flip horizontally
-            return self.flip_piece(self.current_piece), "CHANGE"
-        elif action == Actions.ACTION_DROP:  # drop
+            action_type = "CYCLE"
+        elif action == Actions.ACTION_MOVE_LEFT:
+            success = self.move_piece_left(self.current_piece)
+            action_type = "MOVE"
+        elif action == Actions.ACTION_MOVE_RIGHT:
+            success = self.move_piece_right(self.current_piece)
+            action_type = "MOVE"
+        elif action == Actions.ACTION_ROTATE:
+            success = self.rotate_piece(self.current_piece)
+            action_type = "CHANGE"
+        elif action == Actions.ACTION_FLIP:
+            success = self.flip_piece(self.current_piece)
+            action_type = "CHANGE"
+        elif action == Actions.ACTION_DROP:
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:
                 self.current_player = self.get_next_player()
-                self.set_current_piece(self.current_player.next_piece())
-                return success, "DROP"
-        return False, "INVALID"
+                self.start_turn()
+            action_type = "DROP"
+        else:
+            return False, "INVALID"
 
-    def reset_piece_position(self):
-        """Reset the current piece to starting position (x=0, y=0)."""
-        if hasattr(self, "current_piece"):
-            self.current_piece.x = 0
-            self.current_piece.y = 0
+        self.update()
+        return success, action_type
+
+    def start_turn(self):
+        """Set up the current player's next piece to begin their turn."""
+        next_piece = self.current_player.next_piece()
+        if next_piece:
+            self.set_current_piece(next_piece)
+        else:
+            self.current_player.give_up()

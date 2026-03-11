@@ -1,23 +1,11 @@
 # Gymnasium RL Environment for PyLinkx
-from enum import IntEnum
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import pygame
-from game import Game
 import random
-
+from game import Game, Actions
 from game_renderer import GameRenderer
-
-
-class Actions(IntEnum):
-    ACTION_CYCLE_PIECE = 0
-    ACTION_MOVE_LEFT = 1
-    ACTION_MOVE_RIGHT = 2
-    ACTION_ROTATE = 3
-    ACTION_FLIP = 4
-    ACTION_DROP = 5
-    # ACTION_PASS = 6
 
 
 class PyLinkxEnv(gym.Env):
@@ -75,7 +63,7 @@ class PyLinkxEnv(gym.Env):
         self.valid_action = True
 
         # Initialize first piece
-        self._initialize_next_piece()
+        self.game.start_turn()
 
         observation = self._get_observation()
         info = self._get_info()
@@ -103,11 +91,10 @@ class PyLinkxEnv(gym.Env):
                 print(f"Max steps for turn reached. Forcing drop action.")
         if action == Actions.ACTION_DROP:
             self.steps_for_current_turn = 0  # Reset turn step count on drop
-        # Execute the action
+        # Execute the action (update() is called inside execute_action)
         self.valid_action, action_type = self.game.execute_action(action)
         if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
-        self.game.update()
         
         # Check if game is over
         terminated = self.game.status == Game.GAMEOVER or not self.valid_action
@@ -124,7 +111,7 @@ class PyLinkxEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def render(self, renderer=None, action=Actions|None):
+    def render(self, renderer=None, action: Actions | None = None):
         """Render the current game state."""
         if self.render_mode == "debug":
             if renderer:
@@ -136,16 +123,6 @@ class PyLinkxEnv(gym.Env):
             # print(self.game.grid)
             # print(f"Action: {action}")
             # print(f"Scores: {[p.score for p in self.game.players]}")
-
-    # SHOULD NOT BE HERE; move to game logic
-    def _initialize_next_piece(self):
-        """Initialize the next piece for the current player."""
-        next_piece = self.game.current_player.next_piece()
-        if next_piece:
-            self.game.set_current_piece(next_piece)
-        else:
-            # Player is out of pieces
-            self.game.current_player.give_up()
 
     def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
         """Pads any piece shape into a fixed 4x4 array."""

@@ -1,6 +1,6 @@
 import pygame
 import sys
-from game import Game
+from game import Game, Actions
 from game_renderer import GameRenderer
 
 # Constants
@@ -17,7 +17,7 @@ def main():
 
     game = Game()  # Initialize game logic
     renderer = GameRenderer(screen, game)
-    game.set_current_piece(game.current_player.next_piece())
+    game.start_turn()
     running = True
 
     while running:
@@ -30,41 +30,31 @@ def main():
                     if event.key == pygame.K_ESCAPE:
                         running = False
                     elif event.key == pygame.K_TAB:
-                        # Cycle through available pieces
-                        game.set_current_piece(game.current_player.next_piece())
+                        game.execute_action(Actions.ACTION_CYCLE_PIECE)
                     elif event.key == pygame.K_LEFT:
-                        # Move piece left and stop at board edge
-                        game.move_piece_left(game.current_piece)
+                        game.execute_action(Actions.ACTION_MOVE_LEFT)
                     elif event.key == pygame.K_RIGHT:
-                        # Move piece right and stop at board edge
-                        game.move_piece_right(game.current_piece)
+                        game.execute_action(Actions.ACTION_MOVE_RIGHT)
                     elif event.key == pygame.K_UP:
-                        # Rotate the piece clockwise and adjust position if needed
-                        game.rotate_piece(game.current_piece)
+                        game.execute_action(Actions.ACTION_ROTATE)
                     elif event.key == pygame.K_RETURN:
-                        # Flip the piece horizontally
-                        game.current_piece.flip()
+                        game.execute_action(Actions.ACTION_FLIP)
                     elif event.key == pygame.K_DOWN:
-                        # Drop piece if it is legal move, then switch turn
-                        if game.play_drop_piece(
-                            game.current_piece, game.current_player
-                        ):
-                            game.current_player = game.get_next_player()
-                            game.set_current_piece(game.current_player.next_piece())
+                        game.execute_action(Actions.ACTION_DROP)
                     elif event.key == pygame.K_p:
-                        # Press P to give up and switch turn
+                        # Give up and switch turn
                         game.give_up_and_check(game.current_player)
                         game.current_player = game.get_next_player()
-                        game.set_current_piece(game.current_player.next_piece())
+                        game.start_turn()
+                        game.update()
                 elif game.status == game.GAMEOVER:
                     # should render button to reset game
                     print("Game Over! Press R to Restart or ESC to Quit.")
                     if event.key == pygame.K_r:
                         game.reset()
-                        game.set_current_piece(game.current_player.next_piece())
+                        game.start_turn()
                     elif event.key == pygame.K_ESCAPE:
                         running = False
-                game.update()
         renderer.draw()
         pygame.display.flip()
         clock.tick(FPS)

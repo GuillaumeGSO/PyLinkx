@@ -61,7 +61,25 @@ The codebase is split into pure game logic and the RL wrapper:
 1. **Path win** (priority): A player's pieces form a connected path (8-directional) from left edge to right edge, OR from top edge to bottom edge.
 2. **Score win** (fallback): When all players exhaust their pieces, the player with the largest single contiguous group of their cells wins.
 
-## RL Action Space (Actions enum in game_env.py)
+## Validation After Changes
+
+After any refactoring, run these three commands and verify none produce errors (non-zero exit or exception tracebacks):
+
+```bash
+# 1. Unit tests
+pytest
+
+# 2. RL environment sanity check
+python src/train.py --mode test
+
+# 3. Quick train + evaluate cycle
+python src/train.py --mode train --timesteps 10000
+python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 5
+```
+
+Expected: test mode prints "✓ Environment working correctly!", train completes and saves the model, evaluate prints episode stats without exceptions.
+
+## RL Action Space (Actions enum in game.py)
 
 | Value | Name | Effect |
 |-------|------|--------|

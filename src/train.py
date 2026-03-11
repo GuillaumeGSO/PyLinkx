@@ -172,7 +172,6 @@ def evaluate_agent(
                 action, _ = model.predict(obs, deterministic=True)
                 ep_p2_turns += 1
 
-            env.game.update()
             obs, reward, terminated, truncated, info = env.step(int(action))
             episode_reward += reward
             episode_length += 1
