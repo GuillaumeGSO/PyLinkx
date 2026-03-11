@@ -79,6 +79,19 @@ python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episod
 
 Expected: test mode prints "✓ Environment working correctly!", train completes and saves the model, evaluate prints episode stats without exceptions.
 
+### Fixing failing tests
+
+All tests should pass. If any fail after a change:
+
+1. Run `pytest -v` to identify which tests fail and read the full error message.
+2. Check whether the test expectation is stale (wrong value, wrong shape, wrong signature) vs. a real regression in game logic.
+3. **Stale test** — update the test to match the current implementation. Common patterns:
+   - Observation is `dict` with keys `"grid"` and `"scalars"` — use `obs["grid"].shape`, not `obs.shape`
+   - Imports inside `tests/` must use bare module names (`from game import Game`, not `from src.game import Game`) — mismatched import paths cause `isinstance` to silently return `False`
+   - Reward values are large integers (±2000/1500/50/10/0.1) — not normalized to ±1
+   - `_calculate_reward(player_idx, action_valid, action_type, terminated)` requires all 4 arguments
+4. **Real regression** — fix the source code, then re-run validation.
+
 ## RL Action Space (Actions enum in game.py)
 
 | Value | Name | Effect |
