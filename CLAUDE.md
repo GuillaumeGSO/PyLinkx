@@ -52,7 +52,7 @@ python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episod
 The codebase is split into pure game logic and the RL wrapper:
 
 **Core game layer** (`src/`):
-- `game.py` — `Game` class: 9x9 grid state, piece placement rules (`is_valid_move`, `is_fully_supported`), turn management, and win detection. Also exposes RL interface methods: `get_observation()`, `execute_action(action)`.
+- `game.py` — `Game` class: 9x9 grid state, piece placement rules (`is_valid_move`, `is_fully_supported`), turn management, and win detection. Also exposes `execute_action(action)` as a programmatic dispatcher used by both `main.py` and `game_env.py`.
 - `player.py` — `Player` class: holds each player's piece queue (2× each shape, shuffled), score (largest contiguous area via flood-fill), and win condition check (`check_if_winner` — BFS for border-to-border path).
 - `piece.py` — `Piece` class + `TETRIS_SHAPES` dict: 7 shapes (L, S, c, T, I, u, b), each piece supports `rotate()` and `flip()`.
 - `game_renderer.py` — Pygame rendering, decoupled from game logic.
@@ -101,13 +101,13 @@ All tests should pass. If any fail after a change:
    - Observation is `dict` with keys `"grid"` and `"scalars"` — use `obs["grid"].shape`, not `obs.shape`
    - Imports inside `tests/` must use bare module names (`from game import Game`, not `from src.game import Game`) — mismatched import paths cause `isinstance` to silently return `False`
    - Reward values are large integers (±2000/1500/50/10/0.1) — not normalized to ±1
-   - `_calculate_reward(player_idx, action_valid, action_type, terminated)` requires all 4 arguments
+   - `_calculate_reward(player_idx, action_valid, action, terminated)` requires all 4 arguments; `action` is an `Actions` int, not a string
 4. **Real regression** — fix the source code, then re-run validation.
 
 ## Code Style Principles
 
 - **KISS**: Keep solutions simple. Prefer the simplest approach that works.
-- **Single Responsibility**: Each function/class does one thing. Game logic stays in `game.py`; rendering stays in `game_renderer.py`; RL wrapping stays in `game_env.py`.
+- **Single Responsibility**: Each function/class does one thing. Game logic stays in `game.py`; rendering stays in `game_renderer.py`; RL wrapping stays in `game_env.py`. Specifically: action masks, observation building, and reward logic belong in `game_env.py` — not `game.py`. `game.py` must not import `numpy` or reference Gymnasium concepts.
 - **No over-engineering**: Don't add abstractions, helpers, or configurability for hypothetical future needs. Three similar lines beat a premature abstraction.
 - **SOLID**:
   - **S**ingle Responsibility — one reason to change per class/function (already covered above)

@@ -151,7 +151,15 @@ class PyLinkxEnv(gym.Env):
 
     def valid_action_mask(self) -> np.ndarray:
         """Returns a binary mask (1=valid, 0=invalid) for MaskablePPO."""
-        return self.game.get_valid_actions()
+        piece = self.game.current_piece if hasattr(self.game, "current_piece") else None
+        return np.array([
+            1,  # CYCLE — always valid
+            int(piece is not None and self.game.can_move_piece(piece, dx=-1)),
+            int(piece is not None and self.game.can_move_piece(piece, dx=1)),
+            int(piece is not None and self.game.can_rotate(piece)),
+            int(piece is not None and self.game.can_flip(piece)),
+            int(self.game.can_drop()),
+        ], dtype=np.int8)
 
     def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
         """Pads any piece shape into a fixed 4x4 array."""

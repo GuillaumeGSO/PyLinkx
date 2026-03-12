@@ -1,7 +1,6 @@
 # Game logic for PyLinkx
 import random
 from enum import IntEnum
-import numpy as np
 from player import Player
 from piece import Piece, rotate_shape, flip_shape
 
@@ -273,37 +272,6 @@ class Game:
             for col_idx, value in enumerate(row):
                 if value == 1:
                     self.grid[grid_y + row_idx][grid_x + col_idx] = player.value
-
-    # ===== RL/Programmatic Interface Methods =====
-
-    def get_observation(self) -> dict:
-        """
-        Returns the current game state as an observation dictionary.
-        Suitable for RL agents to receive state information.
-        """
-        return {
-            "grid": [row[:] for row in self.grid],  # Copy of grid
-            "current_player_idx": self.players.index(self.current_player),
-            "scores": [player.score for player in self.players],
-            "current_piece": (
-                self.current_piece if hasattr(self, "current_piece") else None
-            ),
-            "is_game_over": self.status == Game.GAMEOVER,
-            "winner_idx": self.players.index(self.winner) if self.winner else None,
-            "win_type": self.win_type,  # 'path', 'score', or None
-        }
-
-    def get_valid_actions(self) -> np.ndarray:
-        """Returns a binary mask (1=valid, 0=invalid) for each action."""
-        piece = self.current_piece if hasattr(self, "current_piece") else None
-        return np.array([
-            1,  # CYCLE — always valid
-            int(piece is not None and self.can_move_piece(piece, dx=-1)),
-            int(piece is not None and self.can_move_piece(piece, dx=1)),
-            int(piece is not None and self.can_rotate(piece)),
-            int(piece is not None and self.can_flip(piece)),
-            int(self.can_drop()),
-        ], dtype=np.int8)
 
     def execute_action(self, action: int) -> bool:
         """

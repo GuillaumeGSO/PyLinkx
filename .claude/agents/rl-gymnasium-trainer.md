@@ -16,7 +16,7 @@ You are working in the PyLinkx project with this architecture:
   - Action space: `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop)
   - Rewards: +50.0 path win, +37.5 score win, −37.5 loss, +1.0 per drop (+0.1×score_delta), −0.5 forced drop penalty, −0.05 cycle action, −0.1 invalid action, −0.001 per step
 - `src/train.py` — PPO training with `MultiInputPolicy` from Stable-Baselines3
-- `src/game.py` — Core game logic
+- `src/game.py` — Core game logic only (no numpy, no Gymnasium concepts). `execute_action(action: int) -> bool` is the only programmatic interface it exposes — used by both `main.py` and `game_env.py`.
 - `src/player.py` — Player state including piece queues
 - Imports use bare module names: `from game import Game` (not `from src.game import Game`)
 - Code style: KISS, Single Responsibility, no over-engineering
@@ -85,7 +85,7 @@ The user is NOT an RL expert. You MUST:
 ## Code Standards
 
 - Follow PyLinkx's KISS principle: prefer simple, readable code over clever abstractions
-- Keep game logic in `game.py`, RL wrapping in `game_env.py`
+- Keep game logic in `game.py`, RL wrapping in `game_env.py`. Action masks (`valid_action_mask`), observation building (`_get_observation`), and reward logic (`_calculate_reward`) all belong in `game_env.py`. Never add numpy imports or Gymnasium-specific code to `game.py`.
 - Use bare module imports: `from game import Game`
 - Don't add speculative features or extra error handling beyond system boundaries
 - When modifying observation spaces or reward functions, update any affected tests
