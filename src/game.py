@@ -305,43 +305,36 @@ class Game:
             int(self.can_drop()),
         ], dtype=np.int8)
 
-    def execute_action(self, action: int) -> tuple[bool, str]:
+    def execute_action(self, action: int) -> bool:
         """
         Executes an action on the current piece or player state.
-        Returns (success, action_type). Always calls update() before returning.
+        Returns success flag. Always calls update() before returning.
         """
         if not hasattr(self, "current_piece"):
-            return False, "INVALID"
+            return False
 
         success = True
-        action_type = "INVALID"
 
         if action == Actions.ACTION_CYCLE_PIECE:
             self.set_current_piece(self.current_player.next_piece())
-            action_type = "CYCLE"
         elif action == Actions.ACTION_MOVE_LEFT:
             success = self.move_piece_left(self.current_piece)
-            action_type = "MOVE"
         elif action == Actions.ACTION_MOVE_RIGHT:
             success = self.move_piece_right(self.current_piece)
-            action_type = "MOVE"
         elif action == Actions.ACTION_ROTATE:
             success = self.rotate_piece(self.current_piece)
-            action_type = "CHANGE"
         elif action == Actions.ACTION_FLIP:
             success = self.flip_piece(self.current_piece)
-            action_type = "CHANGE"
         elif action == Actions.ACTION_DROP:
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:
                 self.current_player = self.get_next_player()
                 self.start_turn()
-            action_type = "DROP"
         else:
-            return False, "INVALID"
+            return False
 
         self.update()
-        return success, action_type
+        return success
 
     def start_turn(self):
         """Set up the current player's next piece to begin their turn.

@@ -3,7 +3,7 @@
 import numpy as np
 from gymnasium.spaces import Discrete, Dict
 from game_env import PyLinkxEnv
-from game import Game
+from game import Game, Actions
 
 
 class TestPyLinkxEnvInitialization:
@@ -242,10 +242,10 @@ class TestPyLinkxEnvWinConditions:
         env.game.check_for_winner()
 
         winner_idx = env.game.players.index(env.game.winner)
-        score_reward = env._calculate_reward(winner_idx, True, "DROP", True)
+        score_reward = env._calculate_reward(winner_idx, True, Actions.ACTION_DROP, True)
         assert score_reward == 37.5
 
-        path_reward = env._calculate_reward(winner_idx, True, "DROP", True)
+        path_reward = env._calculate_reward(winner_idx, True, Actions.ACTION_DROP, True)
         # Path win reward (50) is higher than score win reward (37.5)
         assert path_reward >= score_reward
 
@@ -255,15 +255,15 @@ class TestPyLinkxEnvWinConditions:
         env.reset()
 
         # During gameplay: -0.001 per step (non-drop, non-cycle)
-        reward = env._calculate_reward(0, True, "MOVE", False)
+        reward = env._calculate_reward(0, True, Actions.ACTION_MOVE_LEFT, False)
         assert reward == -0.001
 
         # Drop reward during gameplay
-        reward = env._calculate_reward(0, True, "DROP", False)
+        reward = env._calculate_reward(0, True, Actions.ACTION_DROP, False)
         assert reward == 1.0
 
         # Invalid action penalty
-        reward = env._calculate_reward(0, False, "INVALID", True)
+        reward = env._calculate_reward(0, False, Actions.ACTION_DROP, True)
         assert reward == -0.1
 
         # Set up a score-based win
@@ -280,7 +280,7 @@ class TestPyLinkxEnvWinConditions:
             return
 
         winner_idx = env.game.players.index(winner)
-        win_reward = env._calculate_reward(winner_idx, True, "DROP", True)
+        win_reward = env._calculate_reward(winner_idx, True, Actions.ACTION_DROP, True)
         assert win_reward == 37.5
 
     def test_score_based_win_logic(self):

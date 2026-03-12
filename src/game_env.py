@@ -99,37 +99,29 @@ class PyLinkxEnv(gym.Env):
         acting_player_idx = self.game.players.index(self.game.current_player)
         old_score = self.game.players[acting_player_idx].score
         # Execute the action (update() is called inside execute_action)
-        self.valid_action, action_type = self.game.execute_action(action)
+        self.valid_action = self.game.execute_action(action)
         self._score_delta = self.game.players[acting_player_idx].score - old_score
         if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
 
-        # If forced drop failed (no valid ghost position), check if player is truly blocked
+        # If forced drop failed (no valid ghost position), auto-pass the player
         if forced_drop and not self.valid_action:
-            if not self.game.player_has_valid_moves(self.game.current_player):
-                # No valid moves at all — auto-pass (mirrors start_turn logic)
-                if self.render_mode == "debug":
-                    print("Forced drop failed, no valid moves. Auto-passing player.")
-                self.game.current_player.give_up()
-                remaining = self.game.get_players_in_play()
-                if not remaining:
-                    self.game.winner = self.game.check_for_winner()
-                elif self.game.one_extra_turn_remaining:
-                    self.game._declare_score_winner()
-                else:
-                    self.game.one_extra_turn_remaining = True
-                    self.game.current_player = self.game.get_next_player()
-                    self.game.start_turn()
-                self.valid_action = True
-                action_type = "DROP"
+            if self.render_mode == "debug":
+                print("Forced drop failed. Auto-passing player.")
+            self.game.current_player.give_up()
+            remaining = self.game.get_players_in_play()
+            if not remaining:
+                self.game.winner = self.game.check_for_winner()
+            elif self.game.one_extra_turn_remaining:
+                self.game._declare_score_winner()
             else:
-                self.valid_action, action_type = self.game.execute_action(Actions.ACTION_CYCLE_PIECE)
-                self._score_delta = 0.0
-                if self.render_mode == "debug":
-                    print("Forced drop failed, cycling to next piece.")
+                self.game.one_extra_turn_remaining = True
+                self.game.current_player = self.game.get_next_player()
+                self.game.start_turn()
+            self.valid_action = True
 
-        # Reset turn counter on successful drop or forced-drop fallback cycle
-        if (action_type == "DROP" and self.valid_action) or (forced_drop and action_type == "CYCLE"):
+        # Reset turn counter on successful drop
+        if action == Actions.ACTION_DROP and self.valid_action:
             self.steps_for_current_turn = 0
 
         # Check if game is over (invalid action no longer terminates episode)
@@ -137,7 +129,7 @@ class PyLinkxEnv(gym.Env):
 
         # Calculate reward using acting player (current_player may have changed after DROP)
         reward = self._calculate_reward(
-            acting_player_idx, self.valid_action, action_type, terminated, self._score_delta, forced_drop
+            acting_player_idx, self.valid_action, action, terminated, self._score_delta, forced_drop
         )
 
         # Get next observation
@@ -248,7 +240,7 @@ class PyLinkxEnv(gym.Env):
         }
 
     def _calculate_reward(
-        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool, score_delta: float = 0.0, forced_drop: bool = False
+        self, player_idx: int, action_valid: bool, action: int, terminated: bool, score_delta: float = 0.0, forced_drop: bool = False
     ) -> float:
         """
         Calculate reward for the current action.
@@ -263,10 +255,10 @@ class PyLinkxEnv(gym.Env):
             else:
                 return -37.5  # Loss penalty
         # In play rewards/penalties
-        if action_type == "DROP":
+        if action == Actions.ACTION_DROP:
             base = 1.0 + 0.1 * score_delta  # Encourage placement + reward area growth
             return base - 0.5 if forced_drop else base  # Penalize procrastination
-        if action_type == "CYCLE":
+        if action == Actions.ACTION_CYCLE_PIECE:
             return -0.05  # Discourage idle cycling without committing to a placement
         return -0.001
 
