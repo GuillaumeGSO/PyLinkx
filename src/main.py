@@ -41,12 +41,6 @@ def main():
                         game.execute_action(Actions.ACTION_FLIP)
                     elif event.key == pygame.K_DOWN:
                         game.execute_action(Actions.ACTION_DROP)
-                    elif event.key == pygame.K_p:
-                        # Give up and switch turn
-                        game.give_up_and_check(game.current_player)
-                        game.current_player = game.get_next_player()
-                        game.start_turn()
-                        game.update()
                 elif game.status == game.GAMEOVER:
                     # should render button to reset game
                     print("Game Over! Press R to Restart or ESC to Quit.")

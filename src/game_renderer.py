@@ -57,12 +57,17 @@ class GameRenderer:
             )
             self.draw_ghost_piece(self.game.current_piece)
             self.draw_scores()
+            if self.game.one_extra_turn_remaining:
+                last_turn_msg = self.font.render("LAST TURN!", True, (255, 140, 0))
+                self.screen.blit(last_turn_msg, (self.SCREEN_WIDTH - last_turn_msg.get_width() - 10, 10))
 
         elif self.game.status == Game.GAMEOVER:
 
             # Draw Winner
             if self.game.winner:
                 msg = self.font.render(f"{self.game.winner.name} Wins !", True, "green")
+                if self.game.win_type == "score":
+                    self.draw_scores()
             elif len(self.game.get_players_in_play()) == 0:
                 msg = self.font.render("Winner by zone !", True, "green")
                 self.draw_scores()
