@@ -1,28 +1,16 @@
 # PyLinkx - Pygame Game with Gymnasium RL Integration
 
-PyLinkx is a two-player block placement game with full Gymnasium RL integration, enabling reinforcement learning agent training.
-
-## Features
-
-- **Interactive Pygame UI**: Play the game manually with graphical interface
-- **Gymnasium Environment**: Fully compatible RL environment for agent training
-- **RL Training Suite**: Pre-configured training scripts with Stable-Baselines3
-- **Comprehensive Testing**: Unit tests for game logic and environment
+PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasium RL environment for training reinforcement learning agents. Players place tetris-like pieces and win by connecting opposite borders (path win) or holding the largest contiguous area when all pieces are used (score win).
 
 ## Setup
 
-1. Make sure you have Python 3.12+ and pip installed.
-2. (Recommended) Use a virtual environment:
-   ```bash
-   python3 -m venv .venv
-   source .venv/bin/activate
-   ```
-3. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-## Run the Game
+## Usage
 
 ### Play Interactively
 
@@ -30,42 +18,48 @@ PyLinkx is a two-player block placement game with full Gymnasium RL integration,
 python src/main.py
 ```
 
+**Goal:** Connect two opposite borders of the 9×9 grid with your pieces (path win), or hold the largest contiguous area when all pieces are used (score win). Players alternate turns.
+
+**Controls:**
+
+| Key | Action |
+|-----|--------|
+| `Tab` | Cycle to next piece in queue |
+| `←` / `→` | Move piece left / right |
+| `↑` | Rotate piece 90° clockwise |
+| `Enter` | Flip piece horizontally |
+| `↓` | Drop piece (place it, ends your turn) |
+| `R` | Restart (game over screen) |
+| `Esc` | Quit |
+
 ### RL Training
 
-#### Quick Test
-
-Test that the environment works:
-
 ```bash
+# Verify environment works
 python src/train.py --mode test
+
+# Train a PPO agent
+python src/train.py --mode train --timesteps 100000 --envs 4 --maxsteps 100
+
+# Evaluate a trained model
+python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10 --render
 ```
 
-#### Train an Agent
-
-Train a PPO agent from scratch:
-
-```bash
-python src/train.py --mode train --timesteps 100000
-```
-
-Options:
-
+**Training options:**
 - `--timesteps`: Number of training steps (default: 100000)
-- `--model`: Path to save model (default: models/ppo_pylinkx.zip)
-
-#### Evaluate a Trained Agent
-
-Evaluate an existing model:
-
-```bash
-python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10
-```
-
-Options:
-
-- `--model`: Path to trained model file
+- `--envs`: Number of parallel environments (default: 4)
+- `--maxsteps`: Max steps per episode (default: 100)
+- `--model`: Path to save/load model (default: `models/ppo_pylinkx.zip`)
 - `--eval-episodes`: Number of evaluation episodes (default: 100)
 - `--render`: Show game visualization during evaluation
+
+### Tests
+
+```bash
+pytest                          # All tests
+pytest tests/test_rl_env.py -v  # RL environment only
+pytest --cov=src                # With coverage
+```
 
 ## Project Structure
 
@@ -73,111 +67,76 @@ Options:
 .
 ├── src/
 │   ├── main.py              # Interactive game entry point
-│   ├── game.py              # Core game logic with RL methods
-│   ├── player.py            # Player and scoring logic
-│   ├── piece.py             # Tetris piece definitions
+│   ├── game.py              # Core game logic and RL interface
+│   ├── player.py            # Player state and piece queue
+│   ├── piece.py             # Tetris piece definitions (7 shapes)
 │   ├── game_renderer.py     # Pygame rendering
 │   ├── game_env.py          # Gymnasium environment wrapper
-│   └── train.py             # RL training script
+│   └── train.py             # PPO training, evaluation, and test scripts
 ├── tests/
 │   ├── test_game_*.py       # Game logic tests
-│   └── test_rl_env.py       # Environment tests
-├── requirements.txt         # Python dependencies
-└── README.md               # This file
+│   ├── test_player_*.py     # Player scoring tests
+│   └── test_rl_env.py       # Gymnasium environment tests
+├── models/                  # Saved model checkpoints
+├── requirements.txt
+└── README.md
 ```
 
-## RL Environment (Gymnasium)
+## RL Environment
 
 ### Action Space
 
-Discrete(4) - Four possible actions:
+`Discrete(6)` — six actions:
 
-- **0**: Move piece left
-- **1**: Move piece right
-- **2**: Rotate piece
-- **3**: Drop piece (finalize placement)
+| Value | Action | Effect |
+|-------|--------|--------|
+| 0 | Cycle piece | Switch to next piece in queue |
+| 1 | Move left | Move current piece left |
+| 2 | Move right | Move current piece right |
+| 3 | Rotate | Rotate 90° clockwise |
+| 4 | Flip | Flip piece horizontally |
+| 5 | Drop | Place piece at ghost position (ends turn) |
 
 ### Observation Space
 
-Box(9, 9, 1) - Game grid as numpy array:
+`Dict` with two components:
 
-- 9x9 grid with values [0=empty, 1=player1, 2=player2]
-- Expandable with additional state features
+- **`grid`**: `Box(9, 9, 1)` — game grid normalized to `[0.0, 0.5, 1.0]` (empty / player 1 / player 2)
+- **`scalars`**: `Box(27,)` — 27 normalized scalar features:
+  - Player value, piece x position, player 1 score, ghost y (−1 if no valid drop)
+  - Piece type id, remaining pieces ratio, ghost presence flag, player 2 score
+  - Game over flag, last action validity, remaining turn steps ratio
+  - Current piece shape padded to 4×4 (16 values)
 
 ### Reward Structure
 
-Sparse rewards (can be extended):
+| Event | Reward |
+|-------|--------|
+| Path win | +10.0 |
+| Score win | +7.5 |
+| Loss | −7.5 |
+| Drop (place piece) | +0.1 + 0.01 × score_delta |
+| Forced drop (procrastination penalty) | −0.05 |
+| Invalid action | −1.0 |
+| Per step | −0.001 |
 
-- **+1.0**: Win game
-- **-0.5**: Lose/game over
-- **0.0**: During gameplay
+### Training Configuration (PPO)
 
-## Key Files for RL Integration
-
-- **[src/game_env.py](src/game_env.py)** - PyLinkxEnv class implementing gymnasium.Env
-- **[src/game.py](src/game.py)** - Refactored game logic with RL methods:
-  - `get_observation()` - Extract game state
-  - `execute_action(action)` - Apply player action
-  - `get_reward()` - Calculate reward
-- **[src/train.py](src/train.py)** - Training, evaluation, and demo scripts
-
-## Migration to Gymnasium
-
-The codebase has been refactored to support RL training:
-
-1. **Game Logic** - Decoupled from UI for programmatic control
-2. **Environment Wrapper** - Gymnasium-compatible wrapper for RL agents
-3. **State Representation** - Grid and score tracking for observations
-4. **Reward System** - Defined rewards for agent feedback
-5. **Training Scripts** - Integration with Stable-Baselines3
-
-### Testing Refactoring
-
-```bash
-# Run all tests
-pytest
-
-# Run specific test file
-pytest tests/test_rl_env.py -v
-```
-
-## Running Tests
-
-```bash
-# Run all tests
-pytest
-
-# Run with coverage
-pytest --cov=src
-
-# Run specific test file
-pytest tests/test_rl_env.py -v
-```
+| Hyperparameter | Value |
+|---------------|-------|
+| Policy | MultiInputPolicy |
+| Learning rate | 3e-4 |
+| n_steps | 2048 |
+| batch_size | 128 |
+| n_epochs | 10 |
+| gamma | 0.999 |
+| ent_coef | 0.02 |
+| Reward normalization | VecNormalize |
 
 ## Dependencies
 
-- **pygame** - Game rendering and UI
-- **gymnasium** - RL environment standard
-- **numpy** - Numerical computing
-- **stable-baselines3** - RL algorithms (PPO, DQN, etc.)
-- **pytest** - Testing framework
-
-## Development
-
-### Game Logic Tests
-
-- `tests/test_game_*.py` - Validate core game mechanics
-- `tests/test_player_*.py` - Player scoring and actions
-
-### RL Environment Tests
-
-- `tests/test_rl_env.py` - Gymnasium environment validation
-
-## Future Enhancements
-
-- [ ] Multi-agent self-play training (PettingZoo)
-- [ ] Dense reward shaping (score-based rewards)
-- [ ] PPO vs DQN algorithm comparison
-- [ ] Advanced opponents (heuristic or RL-based)
-- [ ] Hyperparameter tuning utilities
-- [ ] Training visualization and monitoring
+- **pygame** — game rendering and UI
+- **gymnasium** — RL environment standard
+- **numpy** — numerical computing
+- **stable-baselines3** — PPO implementation
+- **pytest** — testing framework

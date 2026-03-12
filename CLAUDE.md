@@ -97,7 +97,12 @@ All tests should pass. If any fail after a change:
 - **KISS**: Keep solutions simple. Prefer the simplest approach that works.
 - **Single Responsibility**: Each function/class does one thing. Game logic stays in `game.py`; rendering stays in `game_renderer.py`; RL wrapping stays in `game_env.py`.
 - **No over-engineering**: Don't add abstractions, helpers, or configurability for hypothetical future needs. Three similar lines beat a premature abstraction.
-- **SOLID**: Depend on interfaces not implementations. New win conditions or piece types should not require rewriting existing methods.
+- **SOLID**:
+  - **S**ingle Responsibility — one reason to change per class/function (already covered above)
+  - **O**pen/Closed — open for extension, closed for modification; add new piece types or win conditions without rewriting existing methods
+  - **L**iskov Substitution — subtypes must be substitutable for their base type; a custom `Piece` subclass must work anywhere `Piece` is used
+  - **I**nterface Segregation — don't force callers to depend on methods they don't use; keep `game.py`, `player.py`, and `game_env.py` interfaces focused
+  - **D**ependency Inversion — depend on abstractions not concretions; `game_env.py` depends on `Game`'s public interface, not its internals
 - **No speculative features**: Only implement what is explicitly requested. No extra error handling, fallbacks, or validation beyond what's needed at system boundaries.
 
 ## RL Action Space (Actions enum in game.py)
