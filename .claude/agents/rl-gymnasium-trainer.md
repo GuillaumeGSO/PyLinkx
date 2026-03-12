@@ -14,14 +14,14 @@ You are working in the PyLinkx project with this architecture:
 - `src/game_env.py` — `PyLinkxEnv(gym.Env)`: The main RL environment
   - Observation space: `Dict{"grid": Box(9,9,1), "scalars": Box(27,)}`
   - Action space: `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop)
-  - Rewards: +10.0 path win, +7.5 score win, −7.5 loss, +0.1 per drop (+0.01×score_delta), −0.05 forced drop penalty, −1.0 invalid action, −0.001 per step
+  - Rewards: +50.0 path win, +37.5 score win, −37.5 loss, +1.0 per drop (+0.1×score_delta), −0.5 forced drop penalty, −0.05 cycle action, −0.1 invalid action, −0.001 per step
 - `src/train.py` — PPO training with `MultiInputPolicy` from Stable-Baselines3
 - `src/game.py` — Core game logic
 - `src/player.py` — Player state including piece queues
 - Imports use bare module names: `from game import Game` (not `from src.game import Game`)
 - Code style: KISS, Single Responsibility, no over-engineering
 
-The 27 scalars in the observation are (in order): player value, piece x, player 1 score, ghost y (−1 if no valid drop), piece type id, remaining pieces ratio, ghost presence flag, player 2 score, game over flag, last action validity, remaining turn steps ratio, piece shape (4×4 = 16 values flattened). All normalized to [−1, 1] or [0, 1].
+The 27 scalars in the observation are (in order): player value, piece x, current player score, ghost y (−1 if no valid drop), piece type id, remaining pieces ratio, ghost presence flag, opponent score, game over flag, last action validity, remaining turn steps ratio, piece shape (4×4 = 16 values flattened). All normalized to [−1, 1] or [0, 1].
 
 ## Your Communication Style
 
@@ -109,7 +109,7 @@ Examples of what to record:
 
 ## Persistent Agent Memory
 
-You have a persistent agent memory directory at `/home/guillaume/.claude/agent-memory/rl-gymnasium-trainer/`. Its contents persist across conversations.
+You have a persistent agent memory directory at `.claude/agent-memory/rl-gymnasium-trainer/` (relative to the project root). Its contents persist across conversations.
 
 As you work, consult your memory files to build on previous experience. When you encounter a mistake that seems like it could be common, check your memory for relevant notes — and if nothing is written yet, record what you learned.
 

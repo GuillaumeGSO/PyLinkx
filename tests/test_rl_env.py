@@ -28,7 +28,7 @@ class TestPyLinkxEnvInitialization:
         assert isinstance(env.observation_space, Dict)
         assert env.observation_space["grid"].shape == (9, 9, 1)
         assert env.observation_space["grid"].dtype == np.float32
-        assert env.observation_space["scalars"].shape == (27,)
+        assert env.observation_space["scalars"].shape == (34,)
         assert env.observation_space["scalars"].dtype == np.float32
 
 
@@ -51,7 +51,7 @@ class TestPyLinkxEnvReset:
         obs, info = env.reset()
 
         assert obs["grid"].shape == (9, 9, 1)
-        assert obs["scalars"].shape == (27,)
+        assert obs["scalars"].shape == (34,)
 
     def test_reset_clears_step_count(self):
         """Test that reset clears the step counter."""
@@ -102,7 +102,7 @@ class TestPyLinkxEnvStep:
 
         obs, _, _, _, _ = env.step(0)
         assert obs["grid"].shape == (9, 9, 1)
-        assert obs["scalars"].shape == (27,)
+        assert obs["scalars"].shape == (34,)
 
     def test_step_increments_step_count(self):
         """Test that step increments the step counter."""

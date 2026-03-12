@@ -35,15 +35,16 @@ class PyLinkxEnv(gym.Env):
         # Action space: 6 discrete actions (0-5)
         self.action_space = spaces.Discrete(len(Actions))
 
-        # Observation space: grid (9x9, 1 channel) + 27 scalar features
+        # Observation space: grid (9x9, 1 channel) + 34 scalar features
         # Grid: 9x9 cells with values normalized to [0.0, 0.5, 1.0]
-        # Scalars: player value, piece x, scores, ghost y, piece id, remaining ratio,
-        #          ghost flag, game over flag, action validity,
-        #          remaining turn ratio, padded piece shape (4x4=16)
+        # Scalars: player value, piece x, scores, can_drop flag, piece id,
+        #          remaining ratio, game over flag, action validity,
+        #          remaining turn ratio, padded piece shape (4x4=16),
+        #          edge touch flags: p1(left/right/top/bottom), p2(left/right/top/bottom)
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0.0, high=1.0, shape=(9, 9, 1), dtype=np.float32),
-                "scalars": spaces.Box(low=-1.0, high=1.0, shape=(27,), dtype=np.float32),
+                "scalars": spaces.Box(low=-1.0, high=1.0, shape=(34,), dtype=np.float32),
             }
         )
         self.last_scores = [0, 0]  # Track score changes for dense rewards
@@ -163,6 +164,23 @@ class PyLinkxEnv(gym.Env):
         padded[:rows, :cols] = np.array(shape)
         return padded.flatten()  # Returns 16 scalars
 
+    def _get_edge_flags(self) -> np.ndarray:
+        """
+        Returns 8 binary float32 values: one per player per edge direction.
+        [p1_left, p1_right, p1_top, p1_bottom, p2_left, p2_right, p2_top, p2_bottom]
+        A flag is 1.0 if any of the player's cells touches that grid edge, else 0.0.
+        """
+        grid = np.array(self.game.grid, dtype=np.int8)
+        g = self.game.GRID_SIZE - 1
+        flags = []
+        for player_val in (1, 2):
+            mask = grid == player_val
+            flags.append(float(np.any(mask[:, 0])))   # touches left  (col 0)
+            flags.append(float(np.any(mask[:, g])))   # touches right (col g)
+            flags.append(float(np.any(mask[0, :])))   # touches top   (row 0)
+            flags.append(float(np.any(mask[g, :])))   # touches bottom (row g)
+        return np.array(flags, dtype=np.float32)
+
     def _get_observation(self) -> dict:
         """
         Captures the grid for pathfinding (border connection)
@@ -187,10 +205,9 @@ class PyLinkxEnv(gym.Env):
                 float(self.game.current_player.value - 1) / (nb_players - 1),  # Normalized to [0, 1]
                 float(current_piece.x) / self.game.GRID_SIZE,  # Normalized x position
                 player_scores[0],  # Player 1 score normalized
-                float(self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1),  # -1 if no valid drop
+                float(1.0 if self.game.ghost_grid_y else 0.0),  # Can drop flag (1.0 if valid drop position exists)
                 current_piece_id,  # Normalized piece type id
                 remaining_ratio,  # Fraction of pieces remaining
-                float(1.0 if self.game.ghost_grid_y else 0.0),  # Ghost piece presence flag
                 player_scores[1],  # Player 2 score normalized
                 float(self.game.status == Game.GAMEOVER),  # Game over flag
                 float(self.valid_action),  # Last action validity
@@ -202,11 +219,12 @@ class PyLinkxEnv(gym.Env):
 
         remaining_actions_ratio = (self.max_steps_by_turn - self.steps_for_current_turn) / self.max_steps_by_turn
 
-        # Concatenate into a single (27,) array: 10 scalars + 1 ratio + 16 shape
+        # Concatenate into a single (34,) array: 9 scalars + 1 ratio + 16 shape + 8 edge flags
         scalars = np.concatenate([
             other_scalars,
             [remaining_actions_ratio],
-            shape_vals
+            shape_vals,
+            self._get_edge_flags(),   # idx 27-34: p1/p2 edge touch flags
         ])
 
         return {"grid": grid_array, "scalars": scalars}
