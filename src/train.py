@@ -36,6 +36,7 @@ def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
     max_steps: int = 500,
+    max_steps_by_turn: int = 100,
     envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
 ):
@@ -47,6 +48,7 @@ def train_agent(
         eval_episodes: Number of episodes per evaluation
         model_save_path: Path to save the trained model
         max_steps: Maximum steps per episode to prevent infinite loops
+        max_steps_by_turn: Maximum steps per turn before a drop is forced
     """
     print("=" * 60)
     print("PyLinkx RL Training Script")
@@ -63,11 +65,12 @@ def train_agent(
         env = PyLinkxEnv(**kwargs)
         return ActionMasker(env, lambda e: e.valid_action_mask())
 
-    env = make_vec_env(make_masked_env, n_envs=n_envs, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
+    env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn}
+    env = make_vec_env(make_masked_env, n_envs=n_envs, env_kwargs=env_kwargs, wrapper_class=Monitor)
     env = VecNormalize(env, norm_reward=True, norm_obs=False)
 
     # Create evaluation environment (must be wrapped the same way for EvalCallback)
-    eval_env = make_vec_env(make_masked_env, n_envs=1, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
+    eval_env = make_vec_env(make_masked_env, n_envs=1, env_kwargs=env_kwargs, wrapper_class=Monitor)
     eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
 
     # Setup evaluation callback
@@ -120,7 +123,7 @@ def train_agent(
 
 
 def evaluate_agent(
-    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100
+    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100, max_steps_by_turn: int = 100
 ):
     """
     Evaluate a trained agent.
@@ -129,6 +132,7 @@ def evaluate_agent(
         model_path: Path to the trained model
         num_episodes: Number of evaluation episodes
         render: Whether to render episodes
+        max_steps_by_turn: Maximum steps per turn before a drop is forced
     """
     print("\n" + "=" * 60)
     print("Evaluating Agent")
@@ -139,7 +143,7 @@ def evaluate_agent(
     model = MaskablePPO.load(model_path)
 
     # Create evaluation environment
-    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps)
+    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps, max_steps_by_turn=max_steps_by_turn)
 
     episode_rewards = []
     episode_lengths = []
@@ -289,6 +293,12 @@ if __name__ == "__main__":
         help="Limit episode length",
     )
     parser.add_argument(
+        "--maxstepsbyturn",
+        type=int,
+        default=100,
+        help="Maximum steps per turn before a drop is forced (default: 100)",
+    )
+    parser.add_argument(
         "--model",
         default="models/ppo_pylinkx.zip",
         help="Path to model file",
@@ -314,6 +324,7 @@ if __name__ == "__main__":
             total_timesteps=args.timesteps,
             model_save_path=args.model,
             max_steps=args.maxsteps,
+            max_steps_by_turn=args.maxstepsbyturn,
             envs=args.envs,
         )
         print("\n✓ Training completed successfully!")
@@ -322,6 +333,7 @@ if __name__ == "__main__":
             model_path=args.model,
             num_episodes=args.eval_episodes,
             max_steps=args.maxsteps,
+            max_steps_by_turn=args.maxstepsbyturn,
             render=args.render,
         )
         print("\n✓ Evaluation completed!")

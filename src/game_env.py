@@ -18,16 +18,18 @@ class PyLinkxEnv(gym.Env):
     metadata = {"render_modes": ["debug"], "render_fps": 8}
     PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
 
-    def __init__(self, render_mode=None, max_steps=500):
+    def __init__(self, render_mode=None, max_steps=500, max_steps_by_turn=100):
         """
         Initialize the PyLinkx Gymnasium environment.
 
         Args:
             render_mode: Rendering mode (None or "debug")
             max_steps: Maximum steps per episode to prevent infinite loops
+            max_steps_by_turn: Maximum steps allowed per turn before a drop is forced
         """
         self.render_mode = render_mode
         self.max_steps = max_steps
+        self._max_steps_by_turn = max_steps_by_turn
         self.step_count = 0
         self.valid_action = True
         self.game = Game()
@@ -61,7 +63,7 @@ class PyLinkxEnv(gym.Env):
         self.game.reset()
         self.step_count = 0
         self.steps_for_current_turn = 0
-        self.max_steps_by_turn = 30
+        self.max_steps_by_turn = self._max_steps_by_turn
         self.last_scores = [0, 0]
         self.valid_action = True
         self._score_delta = 0.0
