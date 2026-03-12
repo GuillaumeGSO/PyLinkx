@@ -14,6 +14,14 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Running Commands
+
+**Always activate the venv before running any Python command** — each Bash tool call is a fresh shell, so prefix every command with the activation:
+
+```bash
+source venv/bin/activate && <command>
+```
+
 ## Commands
 
 ```bash
@@ -60,6 +68,10 @@ The codebase is split into pure game logic and the RL wrapper:
 
 1. **Path win** (priority): A player's pieces form a connected path (8-directional) from left edge to right edge, OR from top edge to bottom edge.
 2. **Score win** (fallback): When all players exhaust their pieces, the player with the largest single contiguous group of their cells wins.
+
+## Documentation
+
+When making changes that affect user-facing behavior — game rules, controls, win conditions, RL action/observation space, CLI commands, or setup steps — update `README.md` to reflect the new behavior.
 
 ## Validation After Changes
 

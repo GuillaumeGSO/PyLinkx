@@ -174,7 +174,7 @@ class TestPyLinkxEnvReward:
     """Test reward calculation."""
 
     def test_reward_during_gameplay(self):
-        """Test that reward is -0.1 per non-drop step during gameplay."""
+        """Test that CYCLE action incurs the cycle penalty during gameplay."""
         env = PyLinkxEnv(max_steps=1000)
         env.reset()
 
@@ -182,7 +182,7 @@ class TestPyLinkxEnvReward:
         for _ in range(10):
             obs, reward, terminated, truncated, info = env.step(0)
             if not terminated:
-                assert reward == -0.001
+                assert reward == -0.05
                 break
 
     def test_reward_structure(self):
@@ -243,10 +243,10 @@ class TestPyLinkxEnvWinConditions:
 
         winner_idx = env.game.players.index(env.game.winner)
         score_reward = env._calculate_reward(winner_idx, True, "DROP", True)
-        assert score_reward == 7.5
+        assert score_reward == 37.5
 
         path_reward = env._calculate_reward(winner_idx, True, "DROP", True)
-        # Path win reward (10) is higher than score win reward (7.5)
+        # Path win reward (50) is higher than score win reward (37.5)
         assert path_reward >= score_reward
 
     def test_reward_structure(self):
@@ -254,17 +254,17 @@ class TestPyLinkxEnvWinConditions:
         env = PyLinkxEnv()
         env.reset()
 
-        # During gameplay: -0.001 per step (non-drop)
+        # During gameplay: -0.001 per step (non-drop, non-cycle)
         reward = env._calculate_reward(0, True, "MOVE", False)
         assert reward == -0.001
 
         # Drop reward during gameplay
         reward = env._calculate_reward(0, True, "DROP", False)
-        assert reward == 0.1
+        assert reward == 1.0
 
         # Invalid action penalty
         reward = env._calculate_reward(0, False, "INVALID", True)
-        assert reward == -1.0
+        assert reward == -0.1
 
         # Set up a score-based win
         env.game.grid[0][0] = 1
@@ -281,7 +281,7 @@ class TestPyLinkxEnvWinConditions:
 
         winner_idx = env.game.players.index(winner)
         win_reward = env._calculate_reward(winner_idx, True, "DROP", True)
-        assert win_reward == 7.5
+        assert win_reward == 37.5
 
     def test_score_based_win_logic(self):
         """Test that score-based wins work when all players are out."""

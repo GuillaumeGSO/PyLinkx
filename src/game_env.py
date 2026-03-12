@@ -234,16 +234,18 @@ class PyLinkxEnv(gym.Env):
         Path-finding wins are more valuable as they require strategic placement.
         """
         if not action_valid:
-            return -1.0  # Penalty for invalid action (does not terminate episode)
+            return -0.1  # Small penalty for invalid action — keeps it proportional to DROP reward
         if terminated:
             if self.game.winner and self.game.players.index(self.game.winner) == player_idx:
-                return 10.0 if self.game.win_type == "path" else 7.5
+                return 50.0 if self.game.win_type == "path" else 37.5
             else:
-                return -7.5  # Loss penalty
+                return -37.5  # Loss penalty
         # In play rewards/penalties
         if action_type == "DROP":
-            base = 0.1 + 0.01 * score_delta  # Encourage placement + reward area growth
-            return base - 0.05 if forced_drop else base  # Penalize procrastination
+            base = 1.0 + 0.1 * score_delta  # Encourage placement + reward area growth
+            return base - 0.5 if forced_drop else base  # Penalize procrastination
+        if action_type == "CYCLE":
+            return -0.05  # Discourage idle cycling without committing to a placement
         return -0.001
 
     def close(self):

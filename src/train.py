@@ -9,6 +9,7 @@ This script demonstrates how to:
 4. Evaluate agent performance
 """
 
+import os
 import random
 import numpy as np
 import sys
@@ -32,8 +33,8 @@ from game_env import Actions, PyLinkxEnv
 def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
-    max_steps: int = 100,
-    envs: int = 4,
+    max_steps: int = 500,
+    envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
 ):
     """
@@ -55,6 +56,7 @@ def train_agent(
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
+    print(f"Using {n_envs} parallel environments (CPU cores: {os.cpu_count()})")
     env = make_vec_env(PyLinkxEnv, n_envs=n_envs, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
     env = VecNormalize(env, norm_reward=True, norm_obs=False)
 
@@ -229,6 +231,9 @@ def quick_test():
     print("Quick Environment Test")
     print("=" * 60)
 
+    _default_envs = max(1, (os.cpu_count() or 4) - 1)
+    print(f"Auto-detected parallel environments: {_default_envs} (CPU cores: {os.cpu_count()})")
+
     print("\n1. Creating environment...")
     env = PyLinkxEnv()
 
@@ -269,16 +274,17 @@ if __name__ == "__main__":
         default=100000,
         help="Total training timesteps",
     )
+    _default_envs = max(1, (os.cpu_count() or 4) - 1)
     parser.add_argument(
         "--envs",
         type=int,
-        default=4,
-        help="Number of parallel environments for training",
+        default=_default_envs,
+        help=f"Number of parallel environments (default: auto-detected {_default_envs})",
     )
     parser.add_argument(
         "--maxsteps",
         type=int,
-        default=100,
+        default=500,
         help="Limit episode length",
     )
     parser.add_argument(
