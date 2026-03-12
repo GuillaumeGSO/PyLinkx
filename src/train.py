@@ -24,6 +24,7 @@ from game_renderer import GameRenderer
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.vec_env import VecNormalize
 
 from game_env import Actions, PyLinkxEnv
 
@@ -55,9 +56,11 @@ def train_agent(
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
     env = make_vec_env(PyLinkxEnv, n_envs=n_envs, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
+    env = VecNormalize(env, norm_reward=True, norm_obs=False)
 
-    # Create evaluation environment
-    eval_env = Monitor(PyLinkxEnv(max_steps=max_steps))  # Wrap with Monitor for logging
+    # Create evaluation environment (must be wrapped the same way for EvalCallback)
+    eval_env = make_vec_env(PyLinkxEnv, n_envs=1, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
+    eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
 
     # Setup evaluation callback
     eval_callback = EvalCallback(

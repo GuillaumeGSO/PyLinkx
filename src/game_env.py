@@ -103,12 +103,29 @@ class PyLinkxEnv(gym.Env):
         if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
 
-        # If forced drop failed (no valid ghost position), cycle to next piece to unblock
+        # If forced drop failed (no valid ghost position), check if player is truly blocked
         if forced_drop and not self.valid_action:
-            self.valid_action, action_type = self.game.execute_action(Actions.ACTION_CYCLE_PIECE)
-            self._score_delta = 0.0
-            if self.render_mode == "debug":
-                print("Forced drop failed, cycling to next piece.")
+            if not self.game.player_has_valid_moves(self.game.current_player):
+                # No valid moves at all — auto-pass (mirrors start_turn logic)
+                if self.render_mode == "debug":
+                    print("Forced drop failed, no valid moves. Auto-passing player.")
+                self.game.current_player.give_up()
+                remaining = self.game.get_players_in_play()
+                if not remaining:
+                    self.game.winner = self.game.check_for_winner()
+                elif self.game.one_extra_turn_remaining:
+                    self.game._declare_score_winner()
+                else:
+                    self.game.one_extra_turn_remaining = True
+                    self.game.current_player = self.game.get_next_player()
+                    self.game.start_turn()
+                self.valid_action = True
+                action_type = "DROP"
+            else:
+                self.valid_action, action_type = self.game.execute_action(Actions.ACTION_CYCLE_PIECE)
+                self._score_delta = 0.0
+                if self.render_mode == "debug":
+                    print("Forced drop failed, cycling to next piece.")
 
         # Reset turn counter on successful drop or forced-drop fallback cycle
         if (action_type == "DROP" and self.valid_action) or (forced_drop and action_type == "CYCLE"):
@@ -217,22 +234,17 @@ class PyLinkxEnv(gym.Env):
         Path-finding wins are more valuable as they require strategic placement.
         """
         if not action_valid:
-            return -50.0  # Penalty for invalid action (does not terminate episode)
+            return -1.0  # Penalty for invalid action (does not terminate episode)
         if terminated:
-            if (
-                self.game.winner
-                and self.game.players.index(self.game.winner) == player_idx
-            ):
-                # Player won
-                if self.game.win_type == "path":
-                    return 2000.0  # Higher reward for path-finding victory
-                else:
-                    return 1500.0  # Standard reward for score-based victory
+            if self.game.winner and self.game.players.index(self.game.winner) == player_idx:
+                return 10.0 if self.game.win_type == "path" else 7.5
+            else:
+                return -7.5  # Loss penalty
         # In play rewards/penalties
         if action_type == "DROP":
-            base = 10 + 0.5 * score_delta  # Encourage placement + reward area growth
-            return base - 5.0 if forced_drop else base  # Penalize procrastination
-        return -0.1
+            base = 0.1 + 0.01 * score_delta  # Encourage placement + reward area growth
+            return base - 0.05 if forced_drop else base  # Penalize procrastination
+        return -0.001
 
     def close(self):
         """Clean up resources."""
