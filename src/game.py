@@ -1,6 +1,7 @@
 # Game logic for PyLinkx
 import random
 from enum import IntEnum
+import numpy as np
 from player import Player
 from piece import Piece, rotate_shape, flip_shape
 
@@ -83,32 +84,44 @@ class Game:
             return True
         return False
 
+    def can_move_piece(self, piece: Piece, dx: int) -> bool:
+        new_x = piece.x + dx
+        return 0 <= new_x and new_x + piece.width() <= self.GRID_SIZE
+
+    def can_rotate(self, piece: Piece) -> bool:
+        return piece.shape_name != "u"
+
+    def can_flip(self, piece: Piece) -> bool:
+        return flip_shape(piece.shape) != piece.shape
+
+    def can_drop(self) -> bool:
+        return self.ghost_grid_y is not None
+
     def move_piece_left(self, piece: Piece) -> bool:
-        if piece.x > 0:
+        if self.can_move_piece(piece, dx=-1):
             piece.move_left()
             return True
         return False
 
     def move_piece_right(self, piece: Piece) -> bool:
-        if piece.x < self.GRID_SIZE - piece.width():
+        if self.can_move_piece(piece, dx=1):
             piece.move_right()
             return True
         return False
 
     def rotate_piece(self, piece: Piece) -> bool:
-        if piece.shape_name == "u":
+        if not self.can_rotate(piece):
             return False
         piece.rotate()
         # Ensure the piece doesn't go out of bounds after rotation
         if piece.x + piece.width() > self.GRID_SIZE:
             piece.x = self.GRID_SIZE - piece.width()
         return True
-    
+
     def flip_piece(self, piece: Piece) -> bool:
-        prev_piece_shape = piece.shape
-        piece.flip()
-        if piece.shape == prev_piece_shape:
+        if not self.can_flip(piece):
             return False
+        piece.flip()
         return True
 
     def give_up_and_check(self, player: Player):
@@ -279,6 +292,18 @@ class Game:
             "winner_idx": self.players.index(self.winner) if self.winner else None,
             "win_type": self.win_type,  # 'path', 'score', or None
         }
+
+    def get_valid_actions(self) -> np.ndarray:
+        """Returns a binary mask (1=valid, 0=invalid) for each action."""
+        piece = self.current_piece if hasattr(self, "current_piece") else None
+        return np.array([
+            1,  # CYCLE — always valid
+            int(piece is not None and self.can_move_piece(piece, dx=-1)),
+            int(piece is not None and self.can_move_piece(piece, dx=1)),
+            int(piece is not None and self.can_rotate(piece)),
+            int(piece is not None and self.can_flip(piece)),
+            int(self.can_drop()),
+        ], dtype=np.int8)
 
     def execute_action(self, action: int) -> tuple[bool, str]:
         """

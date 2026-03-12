@@ -155,6 +155,10 @@ class PyLinkxEnv(gym.Env):
 
             print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'}")
 
+    def valid_action_mask(self) -> np.ndarray:
+        """Returns a binary mask (1=valid, 0=invalid) for MaskablePPO."""
+        return self.game.get_valid_actions()
+
     def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
         """Pads any piece shape into a fixed 4x4 array."""
         padded = np.zeros((4, 4), dtype=np.float32)

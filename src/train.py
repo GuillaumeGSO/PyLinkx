@@ -22,7 +22,9 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from game_renderer import GameRenderer
 
-from stable_baselines3 import PPO
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.wrappers import ActionMasker
+from sb3_contrib.common.maskable.utils import get_action_masks
 from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback
 from stable_baselines3.common.vec_env import VecNormalize
@@ -57,11 +59,15 @@ def train_agent(
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
     print(f"Using {n_envs} parallel environments (CPU cores: {os.cpu_count()})")
-    env = make_vec_env(PyLinkxEnv, n_envs=n_envs, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
+    def make_masked_env(**kwargs):
+        env = PyLinkxEnv(**kwargs)
+        return ActionMasker(env, lambda e: e.valid_action_mask())
+
+    env = make_vec_env(make_masked_env, n_envs=n_envs, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
     env = VecNormalize(env, norm_reward=True, norm_obs=False)
 
     # Create evaluation environment (must be wrapped the same way for EvalCallback)
-    eval_env = make_vec_env(PyLinkxEnv, n_envs=1, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
+    eval_env = make_vec_env(make_masked_env, n_envs=1, env_kwargs={"max_steps": max_steps}, wrapper_class=Monitor)
     eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
 
     # Setup evaluation callback
@@ -74,8 +80,8 @@ def train_agent(
     )
 
     # Create and train the agent
-    print("2. Creating PPO agent...")
-    model = PPO(
+    print("2. Creating MaskablePPO agent...")
+    model = MaskablePPO(
         "MultiInputPolicy",  # Multi-layer perceptron policy
         env,
         verbose=1,
@@ -130,7 +136,7 @@ def evaluate_agent(
 
     # Load the trained model
     print(f"\n1. Loading model from {model_path}...")
-    model = PPO.load(model_path)
+    model = MaskablePPO.load(model_path)
 
     # Create evaluation environment
     env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps)
@@ -164,17 +170,12 @@ def evaluate_agent(
 
         while not done:
             current_player = info["current_player_idx"]
+            action_masks = env.valid_action_mask()
             if current_player == 0:  # Agent plays as player 1
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
                 ep_p1_turns += 1
             else:
-                # Player 2 try to drop 50% of the time,takes random actions
-                # if random.random() < 0.5:
-                #     action = Actions.ACTION_DROP
-                # else:
-                #     action = env.action_space.sample()
-                
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
                 ep_p2_turns += 1
 
             obs, reward, terminated, truncated, info = env.step(int(action))
