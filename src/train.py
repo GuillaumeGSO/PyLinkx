@@ -11,6 +11,7 @@ This script demonstrates how to:
 
 import os
 import random
+import subprocess
 import numpy as np
 import sys
 from pathlib import Path
@@ -26,10 +27,32 @@ from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from sb3_contrib.common.maskable.utils import get_action_masks
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
 from stable_baselines3.common.vec_env import VecNormalize
 
 from game_env import Actions, PyLinkxEnv
+
+
+class RenderOnBestCallback(BaseCallback):
+    def __init__(self, max_steps: int, max_steps_by_turn: int):
+        super().__init__(verbose=0)
+        self._max_steps = max_steps
+        self._max_steps_by_turn = max_steps_by_turn
+        self._render_proc: subprocess.Popen | None = None
+
+    def _on_step(self) -> bool:
+        if self._render_proc and self._render_proc.poll() is None:
+            return True  # previous render still running, skip
+        self._render_proc = subprocess.Popen([
+            sys.executable, __file__,
+            "--mode", "evaluate",
+            "--model", "models/best_model.zip",
+            "--eval-episodes", "1",
+            "--render",
+            "--maxsteps", str(self._max_steps),
+            "--maxstepsbyturn", str(self._max_steps_by_turn),
+        ])
+        return True
 
 
 def train_agent(
@@ -39,6 +62,7 @@ def train_agent(
     max_steps_by_turn: int = 100,
     envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
+    render: bool = False,
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -74,8 +98,10 @@ def train_agent(
     eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
 
     # Setup evaluation callback
+    render_callback = RenderOnBestCallback(max_steps, max_steps_by_turn) if render else None
     eval_callback = EvalCallback(
         eval_env,
+        callback_on_new_best=render_callback,
         best_model_save_path="./models/",
         eval_freq=5000,
         n_eval_episodes=eval_episodes,
@@ -157,6 +183,9 @@ def evaluate_agent(
     clock = None
     if render:
         pygame.init()
+        info = pygame.display.Info()
+        x = info.current_w - GameRenderer.SCREEN_WIDTH - 20
+        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{x},50"
         screen = pygame.display.set_mode(
             (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
         )
@@ -326,6 +355,7 @@ if __name__ == "__main__":
             max_steps=args.maxsteps,
             max_steps_by_turn=args.maxstepsbyturn,
             envs=args.envs,
+            render=args.render,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":
