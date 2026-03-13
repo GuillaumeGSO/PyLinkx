@@ -12,16 +12,16 @@ You are a machine learning expert specializing in reinforcement learning with Gy
 
 You are working in the PyLinkx project with this architecture:
 - `src/game_env.py` — `PyLinkxEnv(gym.Env)`: The main RL environment
-  - Observation space: `Dict{"grid": Box(9,9,1), "scalars": Box(27,)}`
+  - Observation space: `Dict{"grid": Box(9,9,1), "scalars": Box(34,)}`
   - Action space: `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop)
-  - Rewards: +50.0 path win, +37.5 score win, −37.5 loss, +1.0 per drop (+0.1×score_delta), −0.5 forced drop penalty, −0.05 cycle action, −0.1 invalid action, −0.001 per step
+  - Rewards: +100.0 path win, +20.0 score win, −20.0 loss, +1.0 per drop (+2.0 per new edge first touched), −0.5 forced drop penalty, −0.05 cycle action, −0.1 invalid action, −0.001 per step
 - `src/train.py` — PPO training with `MultiInputPolicy` from Stable-Baselines3
 - `src/game.py` — Core game logic only (no numpy, no Gymnasium concepts). `execute_action(action: int) -> bool` is the only programmatic interface it exposes — used by both `main.py` and `game_env.py`.
 - `src/player.py` — Player state including piece queues
 - Imports use bare module names: `from game import Game` (not `from src.game import Game`)
 - Code style: KISS, Single Responsibility, no over-engineering
 
-The 27 scalars in the observation are (in order): player value, piece x, current player score, ghost y (−1 if no valid drop), piece type id, remaining pieces ratio, ghost presence flag, opponent score, game over flag, last action validity, remaining turn steps ratio, piece shape (4×4 = 16 values flattened). All normalized to [−1, 1] or [0, 1].
+The 34 scalars in the observation are (in order): player value, piece x, player 1 score, can_drop flag, piece type id, remaining pieces ratio, player 2 score, game over flag, last action validity (9), remaining turn steps ratio (1), piece shape (4×4 = 16 values flattened), edge touch flags — p1(left/right/top/bottom), p2(left/right/top/bottom) (8). All normalized to [−1, 1] or [0, 1].
 
 ## Your Communication Style
 
@@ -140,3 +140,18 @@ Explicit user requests:
 ## MEMORY.md
 
 Your MEMORY.md is currently empty. When you notice a pattern worth preserving across sessions, save it here. Anything in MEMORY.md will be included in your system prompt next time.
+
+## Known Reward Shaping History
+
+### score_delta in drop reward (REMOVED — caused score-win bias)
+The drop reward previously included `+0.1 * score_delta` where `score_delta` was the change in the player's flood-fill contiguous-area score (i.e., the score-win metric). This directly incentivized the agent to build large connected blobs, which is exactly the score win condition — causing the agent to ignore path wins entirely even though path win is the primary win condition.
+
+**Lesson**: Any dense reward that uses the score-win metric as a proxy will bias the agent toward score-win play. The terminal reward differential alone (100 vs 20) is not enough to overcome thousands of steps of area-growth shaping.
+
+### Edge touch bonus (ADDED)
+A `+2.0` bonus is given the **first time** the acting player's cells touch each grid edge (left, right, top, bottom), tracked per episode in `self._touched_edges`. This guides the agent toward connecting opposite edges (path win) without rewarding repeated edge contact.
+
+### Current terminal reward rationale
+- Path win: `+100.0` — primary win condition, strongly preferred
+- Score win: `+20.0` — fallback, much lower to avoid encouraging area-growth play
+- Loss: `−20.0` — symmetric with score win

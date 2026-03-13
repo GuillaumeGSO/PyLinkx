@@ -243,10 +243,10 @@ class TestPyLinkxEnvWinConditions:
 
         winner_idx = env.game.players.index(env.game.winner)
         score_reward = env._calculate_reward(winner_idx, True, Actions.ACTION_DROP, True)
-        assert score_reward == 37.5
+        assert score_reward == 20.0
 
         path_reward = env._calculate_reward(winner_idx, True, Actions.ACTION_DROP, True)
-        # Path win reward (50) is higher than score win reward (37.5)
+        # Path win reward (100) is higher than score win reward (20)
         assert path_reward >= score_reward
 
     def test_reward_structure(self):
@@ -281,7 +281,7 @@ class TestPyLinkxEnvWinConditions:
 
         winner_idx = env.game.players.index(winner)
         win_reward = env._calculate_reward(winner_idx, True, Actions.ACTION_DROP, True)
-        assert win_reward == 37.5
+        assert win_reward == 20.0
 
     def test_score_based_win_logic(self):
         """Test that score-based wins work when all players are out."""

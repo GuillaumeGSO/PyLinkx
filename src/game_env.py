@@ -49,7 +49,7 @@ class PyLinkxEnv(gym.Env):
                 "scalars": spaces.Box(low=-1.0, high=1.0, shape=(34,), dtype=np.float32),
             }
         )
-        self.last_scores = [0, 0]  # Track score changes for dense rewards
+        self._touched_edges = set()  # Track (player_val, edge) first touches for shaping
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         """
@@ -64,7 +64,7 @@ class PyLinkxEnv(gym.Env):
         self.step_count = 0
         self.steps_for_current_turn = 0
         self.max_steps_by_turn = self._max_steps_by_turn
-        self.last_scores = [0, 0]
+        self._touched_edges = set()
         self.valid_action = True
         self._score_delta = 0.0
 
@@ -249,6 +249,26 @@ class PyLinkxEnv(gym.Env):
             "action_valid": action_valid,
         }
 
+    def _edge_touch_bonus(self, player_idx: int) -> float:
+        """Return bonus for first-time edge touches by this player after a drop."""
+        player_val = self.game.players[player_idx].value
+        grid = np.array(self.game.grid, dtype=np.int8)
+        g = self.game.GRID_SIZE - 1
+        mask = grid == player_val
+        edge_checks = [
+            ("left",   bool(np.any(mask[:, 0]))),
+            ("right",  bool(np.any(mask[:, g]))),
+            ("top",    bool(np.any(mask[0, :]))),
+            ("bottom", bool(np.any(mask[g, :]))),
+        ]
+        bonus = 0.0
+        for edge, touched in edge_checks:
+            key = (player_val, edge)
+            if touched and key not in self._touched_edges:
+                self._touched_edges.add(key)
+                bonus += 2.0
+        return bonus
+
     def _calculate_reward(
         self, player_idx: int, action_valid: bool, action: int, terminated: bool, score_delta: float = 0.0, forced_drop: bool = False
     ) -> float:
@@ -258,18 +278,18 @@ class PyLinkxEnv(gym.Env):
         Path-finding wins are more valuable as they require strategic placement.
         """
         if not action_valid:
-            return -0.1  # Small penalty for invalid action — keeps it proportional to DROP reward
+            return -0.1
         if terminated:
             if self.game.winner and self.game.players.index(self.game.winner) == player_idx:
-                return 50.0 if self.game.win_type == "path" else 37.5
+                return 100.0 if self.game.win_type == "path" else 20.0
             else:
-                return -37.5  # Loss penalty
+                return -20.0
         # In play rewards/penalties
         if action == Actions.ACTION_DROP:
-            base = 1.0 + 0.1 * score_delta  # Encourage placement + reward area growth
-            return base - 0.5 if forced_drop else base  # Penalize procrastination
+            base = 1.0 + self._edge_touch_bonus(player_idx)
+            return base - 0.5 if forced_drop else base
         if action == Actions.ACTION_CYCLE_PIECE:
-            return -0.05  # Discourage idle cycling without committing to a placement
+            return -0.05
         return -0.001
 
     def close(self):
