@@ -147,7 +147,9 @@ class PyLinkxEnv(gym.Env):
                 renderer.draw()
                 pygame.display.flip()
 
-            print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'}")
+            mask = self.valid_action_mask()
+            valid_actions = [Actions(i).name for i, v in enumerate(mask) if v]
+            print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'} Valid: {valid_actions}")
 
     def valid_action_mask(self) -> np.ndarray:
         """Returns a binary mask (1=valid, 0=invalid) for MaskablePPO."""
