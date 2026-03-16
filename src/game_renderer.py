@@ -1,4 +1,3 @@
-from tkinter import font
 import pygame
 
 from game import Game
@@ -29,7 +28,7 @@ class GameRenderer:
         self.screen = screen
         self.game = game
         self.SCREEN_WIDTH, self.SCREEN_HEIGHT = screen.get_size()
-        self.font = pygame.font.SysFont("Arial", 28)
+        self.font = pygame.font.Font(None, 28)
         self.replay_rect = pygame.Rect(0, 0, 0, 0)
         self.board_rect = pygame.Rect(
             (self.SCREEN_WIDTH - GameRenderer.BOARD_WIDTH) // 2,
@@ -87,8 +86,6 @@ class GameRenderer:
                 center=(self.SCREEN_WIDTH // 2, self.SCREEN_HEIGHT // 5)
             )
             self.screen.blit(btn_txt, self.replay_rect)
-            pygame.display.flip()
-            pygame.time.delay(3000)
 
     def draw_scores(self):
         for i, player in enumerate(self.game.players):
