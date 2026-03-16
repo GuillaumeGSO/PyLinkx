@@ -1,12 +1,12 @@
-# PyLinkx - Pygame Game with Gymnasium RL Integration
+# PyLinkx - Pygame-CE Game with Gymnasium RL Integration
 
 PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasium RL environment for training reinforcement learning agents. Players place tetris-like pieces and win by connecting opposite borders (path win) or holding the largest contiguous area when all pieces are used (score win).
 
 ## Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -135,7 +135,7 @@ pytest --cov=src                # With coverage
 
 ## Dependencies
 
-- **pygame** — game rendering and UI
+- **pygame-ce** — game rendering and UI (Community Edition, with WebAssembly support)
 - **gymnasium** — RL environment standard
 - **numpy** — numerical computing
 - **stable-baselines3** — PPO implementation

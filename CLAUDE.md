@@ -9,8 +9,8 @@ PyLinkx is a two-player block placement game (on a 9x9 grid) with a Gymnasium RL
 ## Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
+python3 -m venv venv
+source venv/bin/activate
 pip install -r requirements.txt
 ```
 
