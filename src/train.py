@@ -9,7 +9,9 @@ This script demonstrates how to:
 4. Evaluate agent performance
 """
 
+import os
 import random
+import subprocess
 import numpy as np
 import sys
 from pathlib import Path
@@ -21,19 +23,46 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from game_renderer import GameRenderer
 
-from stable_baselines3 import PPO
+from sb3_contrib import MaskablePPO
+from sb3_contrib.common.wrappers import ActionMasker
+from sb3_contrib.common.maskable.utils import get_action_masks
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.callbacks import EvalCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
+from stable_baselines3.common.vec_env import VecNormalize
 
 from game_env import Actions, PyLinkxEnv
+
+
+class RenderOnBestCallback(BaseCallback):
+    def __init__(self, max_steps: int, max_steps_by_turn: int):
+        super().__init__(verbose=0)
+        self._max_steps = max_steps
+        self._max_steps_by_turn = max_steps_by_turn
+        self._render_proc: subprocess.Popen | None = None
+
+    def _on_step(self) -> bool:
+        if self._render_proc and self._render_proc.poll() is None:
+            return True  # previous render still running, skip
+        self._render_proc = subprocess.Popen([
+            sys.executable, __file__,
+            "--mode", "evaluate",
+            "--model", "models/best_model.zip",
+            "--eval-episodes", "1",
+            "--render",
+            "--maxsteps", str(self._max_steps),
+            "--maxstepsbyturn", str(self._max_steps_by_turn),
+        ])
+        return True
 
 
 def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
-    max_steps: int = 100,
-    envs: int = 4,
+    max_steps: int = 500,
+    max_steps_by_turn: int = 100,
+    envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
+    render: bool = False,
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -43,6 +72,7 @@ def train_agent(
         eval_episodes: Number of episodes per evaluation
         model_save_path: Path to save the trained model
         max_steps: Maximum steps per episode to prevent infinite loops
+        max_steps_by_turn: Maximum steps per turn before a drop is forced
     """
     print("=" * 60)
     print("PyLinkx RL Training Script")
@@ -54,14 +84,24 @@ def train_agent(
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
-    env = make_vec_env(PyLinkxEnv, n_envs=n_envs)
+    print(f"Using {n_envs} parallel environments (CPU cores: {os.cpu_count()})")
+    def make_masked_env(**kwargs):
+        env = PyLinkxEnv(**kwargs)
+        return ActionMasker(env, lambda e: e.valid_action_mask())
 
-    # Create evaluation environment
-    eval_env = Monitor(PyLinkxEnv(max_steps=max_steps))  # Wrap with Monitor for logging
+    env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn}
+    env = make_vec_env(make_masked_env, n_envs=n_envs, env_kwargs=env_kwargs, wrapper_class=Monitor)
+    env = VecNormalize(env, norm_reward=True, norm_obs=False)
+
+    # Create evaluation environment (must be wrapped the same way for EvalCallback)
+    eval_env = make_vec_env(make_masked_env, n_envs=1, env_kwargs=env_kwargs, wrapper_class=Monitor)
+    eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
 
     # Setup evaluation callback
+    render_callback = RenderOnBestCallback(max_steps, max_steps_by_turn) if render else None
     eval_callback = EvalCallback(
         eval_env,
+        callback_on_new_best=render_callback,
         best_model_save_path="./models/",
         eval_freq=5000,
         n_eval_episodes=eval_episodes,
@@ -69,8 +109,8 @@ def train_agent(
     )
 
     # Create and train the agent
-    print("2. Creating PPO agent...")
-    model = PPO(
+    print("2. Creating MaskablePPO agent...")
+    model = MaskablePPO(
         "MultiInputPolicy",  # Multi-layer perceptron policy
         env,
         verbose=1,
@@ -78,7 +118,7 @@ def train_agent(
         n_steps=2048,
         batch_size=128,
         n_epochs=10,
-        gamma=0.99,
+        gamma=0.999,
         gae_lambda=0.95,
         clip_range=0.2,
         ent_coef=0.02,
@@ -109,7 +149,7 @@ def train_agent(
 
 
 def evaluate_agent(
-    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100
+    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100, max_steps_by_turn: int = 100
 ):
     """
     Evaluate a trained agent.
@@ -118,6 +158,7 @@ def evaluate_agent(
         model_path: Path to the trained model
         num_episodes: Number of evaluation episodes
         render: Whether to render episodes
+        max_steps_by_turn: Maximum steps per turn before a drop is forced
     """
     print("\n" + "=" * 60)
     print("Evaluating Agent")
@@ -125,10 +166,10 @@ def evaluate_agent(
 
     # Load the trained model
     print(f"\n1. Loading model from {model_path}...")
-    model = PPO.load(model_path)
+    model = MaskablePPO.load(model_path)
 
     # Create evaluation environment
-    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps)
+    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps, max_steps_by_turn=max_steps_by_turn)
 
     episode_rewards = []
     episode_lengths = []
@@ -142,6 +183,9 @@ def evaluate_agent(
     clock = None
     if render:
         pygame.init()
+        info = pygame.display.Info()
+        x = info.current_w - GameRenderer.SCREEN_WIDTH - 20
+        os.environ["SDL_VIDEO_WINDOW_POS"] = f"{x},50"
         screen = pygame.display.set_mode(
             (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
         )
@@ -159,20 +203,14 @@ def evaluate_agent(
 
         while not done:
             current_player = info["current_player_idx"]
+            action_masks = env.valid_action_mask()
             if current_player == 0:  # Agent plays as player 1
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
                 ep_p1_turns += 1
             else:
-                # Player 2 try to drop 50% of the time,takes random actions
-                # if random.random() < 0.5:
-                #     action = Actions.ACTION_DROP
-                # else:
-                #     action = env.action_space.sample()
-                
-                action, _ = model.predict(obs, deterministic=True)
+                action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
                 ep_p2_turns += 1
 
-            env.game.update()
             obs, reward, terminated, truncated, info = env.step(int(action))
             episode_reward += reward
             episode_length += 1
@@ -227,6 +265,9 @@ def quick_test():
     print("Quick Environment Test")
     print("=" * 60)
 
+    _default_envs = max(1, (os.cpu_count() or 4) - 1)
+    print(f"Auto-detected parallel environments: {_default_envs} (CPU cores: {os.cpu_count()})")
+
     print("\n1. Creating environment...")
     env = PyLinkxEnv()
 
@@ -267,17 +308,24 @@ if __name__ == "__main__":
         default=100000,
         help="Total training timesteps",
     )
+    _default_envs = max(1, (os.cpu_count() or 4) - 1)
     parser.add_argument(
         "--envs",
         type=int,
-        default=4,
-        help="Number of parallel environments for training",
+        default=_default_envs,
+        help=f"Number of parallel environments (default: auto-detected {_default_envs})",
     )
     parser.add_argument(
         "--maxsteps",
         type=int,
-        default=100,
+        default=500,
         help="Limit episode length",
+    )
+    parser.add_argument(
+        "--maxstepsbyturn",
+        type=int,
+        default=100,
+        help="Maximum steps per turn before a drop is forced (default: 100)",
     )
     parser.add_argument(
         "--model",
@@ -305,7 +353,9 @@ if __name__ == "__main__":
             total_timesteps=args.timesteps,
             model_save_path=args.model,
             max_steps=args.maxsteps,
+            max_steps_by_turn=args.maxstepsbyturn,
             envs=args.envs,
+            render=args.render,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":
@@ -313,6 +363,7 @@ if __name__ == "__main__":
             model_path=args.model,
             num_episodes=args.eval_episodes,
             max_steps=args.maxsteps,
+            max_steps_by_turn=args.maxstepsbyturn,
             render=args.render,
         )
         print("\n✓ Evaluation completed!")

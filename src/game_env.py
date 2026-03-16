@@ -1,23 +1,10 @@
 # Gymnasium RL Environment for PyLinkx
-from enum import IntEnum
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import pygame
-from game import Game
-import random
-
+from game import Game, Actions
 from game_renderer import GameRenderer
-
-
-class Actions(IntEnum):
-    ACTION_CYCLE_PIECE = 0
-    ACTION_MOVE_LEFT = 1
-    ACTION_MOVE_RIGHT = 2
-    ACTION_ROTATE = 3
-    ACTION_FLIP = 4
-    ACTION_DROP = 5
-    # ACTION_PASS = 6
 
 
 class PyLinkxEnv(gym.Env):
@@ -29,34 +16,40 @@ class PyLinkxEnv(gym.Env):
     """
 
     metadata = {"render_modes": ["debug"], "render_fps": 8}
+    PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
 
-    def __init__(self, render_mode=None, max_steps=500):
+    def __init__(self, render_mode=None, max_steps=500, max_steps_by_turn=100):
         """
         Initialize the PyLinkx Gymnasium environment.
 
         Args:
             render_mode: Rendering mode (None or "debug")
             max_steps: Maximum steps per episode to prevent infinite loops
+            max_steps_by_turn: Maximum steps allowed per turn before a drop is forced
         """
         self.render_mode = render_mode
         self.max_steps = max_steps
+        self._max_steps_by_turn = max_steps_by_turn
         self.step_count = 0
-        self.valid_action= True
+        self.valid_action = True
         self.game = Game()
 
-        # Action space: 7 discrete actions (0-6)
+        # Action space: 6 discrete actions (0-5)
         self.action_space = spaces.Discrete(len(Actions))
 
-        # Observation space: grid (9x9) + 4 scalar features
-        # Grid: 9x9 cells with values [0, 1, 2] (0=empty, 1=player1, 2=player2)
-        # Scalars: [current_player_idx, player1_score, player2_score, is_game_over] -> to be updated
+        # Observation space: grid (9x9, 1 channel) + 34 scalar features
+        # Grid: 9x9 cells with values normalized to [0.0, 0.5, 1.0]
+        # Scalars: player value, piece x, scores, can_drop flag, piece id,
+        #          remaining ratio, game over flag, action validity,
+        #          remaining turn ratio, padded piece shape (4x4=16),
+        #          edge touch flags: p1(left/right/top/bottom), p2(left/right/top/bottom)
         self.observation_space = spaces.Dict(
             {
-                "grid": spaces.Box(low=0, high=2, shape=(9, 9, 1), dtype=np.int8),
-                "scalars": spaces.Box(low=-1, high=self.game.GRID_SIZE * self.game.GRID_SIZE, shape=(27,), dtype=np.float32),
+                "grid": spaces.Box(low=0.0, high=1.0, shape=(9, 9, 1), dtype=np.float32),
+                "scalars": spaces.Box(low=-1.0, high=1.0, shape=(34,), dtype=np.float32),
             }
         )
-        self.last_scores = [0, 0]  # Track score changes for dense rewards
+        self._touched_edges = set()  # Track (player_val, edge) first touches for shaping
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         """
@@ -70,12 +63,13 @@ class PyLinkxEnv(gym.Env):
         self.game.reset()
         self.step_count = 0
         self.steps_for_current_turn = 0
-        self.max_steps_by_turn = 30
-        self.last_scores = [0, 0]
+        self.max_steps_by_turn = self._max_steps_by_turn
+        self._touched_edges = set()
         self.valid_action = True
+        self._score_delta = 0.0
 
         # Initialize first piece
-        self._initialize_next_piece()
+        self.game.start_turn()
 
         observation = self._get_observation()
         info = self._get_info()
@@ -97,25 +91,47 @@ class PyLinkxEnv(gym.Env):
         self.step_count += 1
         self.steps_for_current_turn += 1
 
-        if self.steps_for_current_turn >= self.max_steps_by_turn:
+        forced_drop = self.steps_for_current_turn >= self.max_steps_by_turn
+        if forced_drop:
             action = Actions.ACTION_DROP  # Force drop to end turn
             if self.render_mode == "debug":
-                print(f"Max steps for turn reached. Forcing drop action.")
-        if action == Actions.ACTION_DROP:
-            self.steps_for_current_turn = 0  # Reset turn step count on drop
-        # Execute the action
-        self.valid_action, action_type = self.game.execute_action(action)
+                print("Max steps for turn reached. Forcing drop action.")
+
+        # Capture pre-action state for reward shaping
+        acting_player_idx = self.game.players.index(self.game.current_player)
+        old_score = self.game.players[acting_player_idx].score
+        # Execute the action (update() is called inside execute_action)
+        self.valid_action = self.game.execute_action(action)
+        self._score_delta = self.game.players[acting_player_idx].score - old_score
         if not self.valid_action and self.render_mode == "debug":
             print(f"Invalid action {Actions(action).name}")
-        self.game.update()
-        
-        # Check if game is over
-        terminated = self.game.status == Game.GAMEOVER or not self.valid_action
 
-        # Calculate reward
-        player_idx = self.game.players.index(self.game.current_player)
+        # If forced drop failed (no valid ghost position), auto-pass the player
+        if forced_drop and not self.valid_action:
+            if self.render_mode == "debug":
+                print("Forced drop failed. Auto-passing player.")
+            self.game.current_player.give_up()
+            remaining = self.game.get_players_in_play()
+            if not remaining:
+                self.game.winner = self.game.check_for_winner()
+            elif self.game.one_extra_turn_remaining:
+                self.game._declare_score_winner()
+            else:
+                self.game.one_extra_turn_remaining = True
+                self.game.current_player = self.game.get_next_player()
+                self.game.start_turn()
+            self.valid_action = True
+
+        # Reset turn counter on successful drop
+        if action == Actions.ACTION_DROP and self.valid_action:
+            self.steps_for_current_turn = 0
+
+        # Check if game is over (invalid action no longer terminates episode)
+        terminated = self.game.status == Game.GAMEOVER
+
+        # Calculate reward using acting player (current_player may have changed after DROP)
         reward = self._calculate_reward(
-            player_idx, self.valid_action, action_type, terminated
+            acting_player_idx, self.valid_action, action, terminated, self._score_delta, forced_drop
         )
 
         # Get next observation
@@ -124,28 +140,28 @@ class PyLinkxEnv(gym.Env):
 
         return observation, reward, terminated, False, info
 
-    def render(self, renderer=None, action=Actions|None):
+    def render(self, renderer=None, action: Actions | None = None):
         """Render the current game state."""
         if self.render_mode == "debug":
             if renderer:
                 renderer.draw()
                 pygame.display.flip()
 
-            print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'}")
-            # print(f"Grid:\n")
-            # print(self.game.grid)
-            # print(f"Action: {action}")
-            # print(f"Scores: {[p.score for p in self.game.players]}")
+            mask = self.valid_action_mask()
+            valid_actions = [Actions(i).name for i, v in enumerate(mask) if v]
+            print(f"Player: {self.game.current_player.name} Step: {self.step_count} Action: {Actions(action).name if action is not None else '-'} Valid: {valid_actions}")
 
-    # SHOULD NOT BE HERE; move to game logic
-    def _initialize_next_piece(self):
-        """Initialize the next piece for the current player."""
-        next_piece = self.game.current_player.next_piece()
-        if next_piece:
-            self.game.set_current_piece(next_piece)
-        else:
-            # Player is out of pieces
-            self.game.current_player.give_up()
+    def valid_action_mask(self) -> np.ndarray:
+        """Returns a binary mask (1=valid, 0=invalid) for MaskablePPO."""
+        piece = self.game.current_piece if hasattr(self.game, "current_piece") else None
+        return np.array([
+            1,  # CYCLE — always valid
+            int(piece is not None and self.game.can_move_piece(piece, dx=-1)),
+            int(piece is not None and self.game.can_move_piece(piece, dx=1)),
+            int(piece is not None and self.game.can_rotate(piece)),
+            int(piece is not None and self.game.can_flip(piece)),
+            int(self.game.can_drop()),
+        ], dtype=np.int8)
 
     def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
         """Pads any piece shape into a fixed 4x4 array."""
@@ -156,56 +172,67 @@ class PyLinkxEnv(gym.Env):
         padded[:rows, :cols] = np.array(shape)
         return padded.flatten()  # Returns 16 scalars
 
+    def _get_edge_flags(self) -> np.ndarray:
+        """
+        Returns 8 binary float32 values: one per player per edge direction.
+        [p1_left, p1_right, p1_top, p1_bottom, p2_left, p2_right, p2_top, p2_bottom]
+        A flag is 1.0 if any of the player's cells touches that grid edge, else 0.0.
+        """
+        grid = np.array(self.game.grid, dtype=np.int8)
+        g = self.game.GRID_SIZE - 1
+        flags = []
+        for player_val in (1, 2):
+            mask = grid == player_val
+            flags.append(float(np.any(mask[:, 0])))   # touches left  (col 0)
+            flags.append(float(np.any(mask[:, g])))   # touches right (col g)
+            flags.append(float(np.any(mask[0, :])))   # touches top   (row 0)
+            flags.append(float(np.any(mask[g, :])))   # touches bottom (row g)
+        return np.array(flags, dtype=np.float32)
+
     def _get_observation(self) -> dict:
         """
         Captures the grid for pathfinding (border connection)
         and scalars for the current game state.
         """
-        # 1. Grid (9, 9, 1) - Crucial for the "Border Connection" win condition
+        # 1. Grid (9, 9, 1) - Normalized to [0.0, 0.5, 1.0]
         # The CNN will learn to detect 'chains' of 1s or 2s across the grid.
-        grid_array = np.array(self.game.grid, dtype=np.int8)
+        grid_array = np.array(self.game.grid, dtype=np.float32) / 2.0
         grid_array = np.expand_dims(grid_array, axis=-1)
 
         # 2. Contextual Scalars
         current_piece = self.game.current_piece
-        piece_map = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
-        max_pieces = 2 * len(piece_map)  # move this logic to game
-        current_piece_id = float(piece_map[current_piece.shape_name]) / len(
-            piece_map
-        )  # Normalised
+        nb_players = len(self.game.players)
+        max_pieces = 2 * len(self.PIECE_MAP)
+        current_piece_id = float(self.PIECE_MAP[current_piece.shape_name]) / len(self.PIECE_MAP)
         remaining_ratio = float(len(self.game.current_player.pieces)) / max_pieces
+        grid_cells = float(self.game.GRID_SIZE * self.game.GRID_SIZE)
+        player_scores = [float(p.score) / grid_cells for p in self.game.players]
 
         other_scalars = np.array(
             [
-                float(
-                    self.game.current_player.value
-                ),  # Allow player to know its value in the grid
-                float(current_piece.x) / self.game.GRID_SIZE,  # Normalize x position
-                float(current_piece.y) / self.game.GRID_SIZE,  # Normalize y position
-                float(
-                    self.game.ghost_grid_y / self.game.GRID_SIZE if self.game.ghost_grid_y else -1
-                ),  # -1 if no ghost piece
-                current_piece_id,  # Categorical encoding of piece type
-                remaining_ratio,  # Percentage of pieces left
-                float(1.0 if self.game.ghost_grid_y else 0.0), # Ghost piece presence flag
-                # float(self.game.current_player.score)
-                # / (self.game.GRID_SIZE * self.game.GRID_SIZE),  # Normalize score
-                float(0), #neutralize score for now
-                float(self.game.status == Game.GAMEOVER),  # Game state flag,
-                float(self.valid_action),  # Action validity flag
+                float(self.game.current_player.value - 1) / (nb_players - 1),  # Normalized to [0, 1]
+                float(current_piece.x) / self.game.GRID_SIZE,  # Normalized x position
+                player_scores[0],  # Player 1 score normalized
+                float(1.0 if self.game.ghost_grid_y else 0.0),  # Can drop flag (1.0 if valid drop position exists)
+                current_piece_id,  # Normalized piece type id
+                remaining_ratio,  # Fraction of pieces remaining
+                player_scores[1],  # Player 2 score normalized
+                float(self.game.status == Game.GAMEOVER),  # Game over flag
+                float(self.valid_action),  # Last action validity
             ],
             dtype=np.float32,
         )
-        # 2. Get your 16-element shape array
+        # 3. Padded piece shape (4x4 = 16 values)
         shape_vals = self._get_padded_shape(current_piece.shape)
 
         remaining_actions_ratio = (self.max_steps_by_turn - self.steps_for_current_turn) / self.max_steps_by_turn
 
-        # 3. Use concatenate to merge them into a single (25,) array
+        # Concatenate into a single (34,) array: 9 scalars + 1 ratio + 16 shape + 8 edge flags
         scalars = np.concatenate([
-            np.array(other_scalars, dtype=np.float32), 
+            other_scalars,
             [remaining_actions_ratio],
-            shape_vals
+            shape_vals,
+            self._get_edge_flags(),   # idx 27-34: p1/p2 edge touch flags
         ])
 
         return {"grid": grid_array, "scalars": scalars}
@@ -224,37 +251,49 @@ class PyLinkxEnv(gym.Env):
             "action_valid": action_valid,
         }
 
+    def _edge_touch_bonus(self, player_idx: int) -> float:
+        """Return bonus for first-time edge touches by this player after a drop."""
+        player_val = self.game.players[player_idx].value
+        grid = np.array(self.game.grid, dtype=np.int8)
+        g = self.game.GRID_SIZE - 1
+        mask = grid == player_val
+        edge_checks = [
+            ("left",   bool(np.any(mask[:, 0]))),
+            ("right",  bool(np.any(mask[:, g]))),
+            ("top",    bool(np.any(mask[0, :]))),
+            ("bottom", bool(np.any(mask[g, :]))),
+        ]
+        bonus = 0.0
+        for edge, touched in edge_checks:
+            key = (player_val, edge)
+            if touched and key not in self._touched_edges:
+                self._touched_edges.add(key)
+                bonus += 2.0
+        return bonus
+
     def _calculate_reward(
-        self, player_idx: int, action_valid: bool, action_type: str, terminated: bool
+        self, player_idx: int, action_valid: bool, action: int, terminated: bool, score_delta: float = 0.0, forced_drop: bool = False
     ) -> float:
         """
         Calculate reward for the current action.
 
         Path-finding wins are more valuable as they require strategic placement.
         """
+        if not action_valid:
+            return -0.1
         if terminated:
-            if (
-                self.game.winner
-                and self.game.players.index(self.game.winner) == player_idx
-            ):
-                # Player won
-                if self.game.win_type == "path":
-                    return 2000.0  # Higher reward for path-finding victory
-                else:
-                    return 1500.0  # Standard reward for score-based victory
-            if not action_valid:
-                return -50.0  # Heavier penalty for losing due to invalid action
+            if self.game.winner and self.game.players.index(self.game.winner) == player_idx:
+                return 100.0 if self.game.win_type == "path" else 20.0
+            else:
+                return -20.0
         # In play rewards/penalties
-        if action_valid and action_type == "DROP":
-            return 10 # Encourage piece placement
-        return -0.1
+        if action == Actions.ACTION_DROP:
+            base = 1.0 + self._edge_touch_bonus(player_idx)
+            return base - 0.5 if forced_drop else base
+        if action == Actions.ACTION_CYCLE_PIECE:
+            return -0.05
+        return -0.001
 
     def close(self):
         """Clean up resources."""
         pass
-
-    def seed(self, seed=None):
-        """Set the random seed."""
-        random.seed(seed)
-        np.random.seed(seed)
-        return [seed]

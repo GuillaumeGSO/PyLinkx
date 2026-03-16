@@ -1,4 +1,3 @@
-from inspect import stack
 import random
 from piece import Piece, TETRIS_SHAPES
 
@@ -10,7 +9,7 @@ class Player:
         self.score = 0
         self.color = color
         self.piece_index = 0
-        self.has_gave_up = False
+        self.has_given_up = False
         self.pieces = [Piece(shape, self) for shape in TETRIS_SHAPES]
         self.pieces.extend([Piece(shape, self) for shape in TETRIS_SHAPES])
         random.shuffle(self.pieces)
@@ -23,13 +22,13 @@ class Player:
 
     def next_piece(self):
         if not self.has_pieces():
-            self.has_gave_up = True
+            self.has_given_up = True
             return None
         self.piece_index = (self.piece_index + 1) % len(self.pieces)
         return self.pieces[self.piece_index]
 
     def give_up(self):
-        self.has_gave_up = True
+        self.has_given_up = True
 
     def has_pieces(self):
         return len(self.pieces) > 0
@@ -83,7 +82,7 @@ class Player:
 
         for r in range(rows):
             for c in range(cols):
-                # When we hit a 1, we've found a new zone
+                # When we hit a player cell, we've found a new zone
                 if temp_grid[r][c] == self.value:
                     current_area = 0
                     stack = [(r, c)]

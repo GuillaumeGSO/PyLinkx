@@ -1,7 +1,17 @@
 # Game logic for PyLinkx
 import random
+from enum import IntEnum
 from player import Player
-from piece import Piece
+from piece import Piece, rotate_shape, flip_shape
+
+
+class Actions(IntEnum):
+    ACTION_CYCLE_PIECE = 0
+    ACTION_MOVE_LEFT = 1
+    ACTION_MOVE_RIGHT = 2
+    ACTION_ROTATE = 3
+    ACTION_FLIP = 4
+    ACTION_DROP = 5
 
 
 class Game:
@@ -29,11 +39,11 @@ class Game:
         self.winner = None
         self.win_type = None  # 'path' or 'score'
         self.ghost_grid_y = None
+        self.one_extra_turn_remaining = False
 
     def __repr__(self) -> str:
-        for row in self.grid:
-            print(row)
-        return f"Game State: ${self.status}"
+        rows = "\n".join(str(row) for row in self.grid)
+        return f"Game State: {self.status}\n{rows}"
 
     def set_current_piece(self, piece: Piece | None):
         if piece is None:
@@ -43,47 +53,74 @@ class Game:
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
 
     def get_players_in_play(self):
-        return [player for player in self.players if not player.has_gave_up]
+        return [player for player in self.players if not player.has_given_up]
 
     def play_drop_piece(self, piece: Piece, player: Player):
         self.ghost_grid_y = self.calculate_ghost_position(piece)
         if self.ghost_grid_y is not None:
             self.place_piece_on_grid(piece, piece.x, self.ghost_grid_y, player)
             self.current_player.drop_piece(piece)
+
+            gave_up = False
             if not self.current_player.has_pieces():
                 self.current_player.give_up()
-            self.winner = self.check_for_winner()
-            if self.winner or len(self.get_players_in_play()) == 0:
+                gave_up = True
+
+            if self.one_extra_turn_remaining:
+                # Bonus turn just used — end game (path win has priority)
+                self.winner = self.check_for_winner()
+                if not self.winner:
+                    self._declare_score_winner()
                 self.status = Game.GAMEOVER
+            else:
+                self.winner = self.check_for_winner()
+                if self.winner or not self.get_players_in_play():
+                    self.status = Game.GAMEOVER
+                elif gave_up and self.get_players_in_play():
+                    # Player just exhausted; give opponent one extra turn
+                    self.one_extra_turn_remaining = True
+
             return True
         return False
 
+    def can_move_piece(self, piece: Piece, dx: int) -> bool:
+        new_x = piece.x + dx
+        return 0 <= new_x and new_x + piece.width() <= self.GRID_SIZE
+
+    def can_rotate(self, piece: Piece) -> bool:
+        return piece.shape_name != "u"
+
+    def can_flip(self, piece: Piece) -> bool:
+        return flip_shape(piece.shape) != piece.shape
+
+    def can_drop(self) -> bool:
+        return self.ghost_grid_y is not None
+
     def move_piece_left(self, piece: Piece) -> bool:
-        if piece.x > 0:
+        if self.can_move_piece(piece, dx=-1):
             piece.move_left()
             return True
         return False
 
     def move_piece_right(self, piece: Piece) -> bool:
-        if piece.x < self.GRID_SIZE - piece.width():
+        if self.can_move_piece(piece, dx=1):
             piece.move_right()
             return True
         return False
 
     def rotate_piece(self, piece: Piece) -> bool:
-        if piece.shape_name in ["u"]:
+        if not self.can_rotate(piece):
             return False
         piece.rotate()
         # Ensure the piece doesn't go out of bounds after rotation
         if piece.x + piece.width() > self.GRID_SIZE:
             piece.x = self.GRID_SIZE - piece.width()
         return True
-    
+
     def flip_piece(self, piece: Piece) -> bool:
-        prev_piece_shape = piece.shape
-        piece.flip()
-        if piece.shape == prev_piece_shape:
+        if not self.can_flip(piece):
             return False
+        piece.flip()
         return True
 
     def give_up_and_check(self, player: Player):
@@ -107,13 +144,20 @@ class Game:
         return ghost_grid_y
 
     def update(self):
-        # print("Updating game state...")
-        # print(self)
         self.ghost_grid_y = self.calculate_ghost_position(self.current_piece)
         self.update_scores()
         self.winner = self.check_for_winner()
 
+    def _declare_score_winner(self):
+        self.update_scores()
+        max_score = max(p.score for p in self.players)
+        self.winner = next(p for p in self.players if p.score == max_score)
+        self.win_type = "score"
+        self.status = Game.GAMEOVER
+
     def check_for_winner(self):
+        if self.status == Game.GAMEOVER:
+            return self.winner
         # First, check for path-finding win (higher reward)
         for player in self.players:
             if player.check_if_winner(self.grid):
@@ -148,7 +192,7 @@ class Game:
         for p in range(len(self.players)):
             if self.players[p] == self.current_player:
                 next_index = (p + 1) % len(self.players)
-                while self.players[next_index].has_gave_up:
+                while self.players[next_index].has_given_up:
                     next_index = (next_index + 1) % len(self.players)
                 return self.players[next_index]
 
@@ -157,21 +201,14 @@ class Game:
             player.score = player.calculate_score(self.grid)
 
     def is_valid_move(self, piece: Piece, grid_x, grid_y):
-        shape_cells = set()
-
-        # 1. Bounds & overlap check
         for r, row in enumerate(piece.shape):
             for c, value in enumerate(row):
                 if value == 1:
                     tx, ty = grid_x + c, grid_y + r
-
                     if not (0 <= tx < self.GRID_SIZE and 0 <= ty < self.GRID_SIZE):
                         return False
                     if self.grid[ty][tx] > 0:
                         return False
-
-                    shape_cells.add((tx, ty))
-
         return True
 
     def is_fully_supported(self, piece: Piece, grid_x, grid_y):
@@ -211,68 +248,84 @@ class Game:
         # If we checked all columns and none returned False, the whole piece is supported
         return True
 
+    def player_has_valid_moves(self, player: Player) -> bool:
+        for piece in player.pieces:
+            orig_shape, orig_x = piece.shape, piece.x
+            seen, shape = set(), orig_shape
+            for _ in range(4):
+                for candidate in [shape, flip_shape(shape)]:
+                    key = tuple(tuple(r) for r in candidate)
+                    if key not in seen:
+                        seen.add(key)
+                        piece.shape = candidate
+                        for x in range(self.GRID_SIZE - len(candidate[0]) + 1):
+                            piece.x = x
+                            if self.calculate_ghost_position(piece) is not None:
+                                piece.shape, piece.x = orig_shape, orig_x
+                                return True
+                shape = rotate_shape(shape)
+            piece.shape, piece.x = orig_shape, orig_x
+        return False
+
     def place_piece_on_grid(self, piece, grid_x, grid_y, player: Player):
         for row_idx, row in enumerate(piece.shape):
             for col_idx, value in enumerate(row):
                 if value == 1:
                     self.grid[grid_y + row_idx][grid_x + col_idx] = player.value
 
-    # ===== RL/Programmatic Interface Methods =====
-
-    def get_observation(self) -> dict:
-        """
-        Returns the current game state as an observation dictionary.
-        Suitable for RL agents to receive state information.
-        """
-        return {
-            "grid": [row[:] for row in self.grid],  # Copy of grid
-            "current_player_idx": self.players.index(self.current_player),
-            "scores": [player.score for player in self.players],
-            "current_piece": (
-                self.current_piece if hasattr(self, "current_piece") else None
-            ),
-            "is_game_over": self.status == Game.GAMEOVER,
-            "winner_idx": self.players.index(self.winner) if self.winner else None,
-            "win_type": self.win_type,  # 'path', 'score', or None
-        }
-
-    def execute_action(self, action: int) -> tuple[bool, str]:
+    def execute_action(self, action: int) -> bool:
         """
         Executes an action on the current piece or player state.
-        Returns True if action was valid and executed, False otherwise.
+        Returns success flag. Always calls update() before returning.
         """
-        from game_env import Actions
-
-        # if action == Actions.ACTION_PASS:  # pass/give_up
-        #     self.give_up_and_check(self.current_player)
-        #     self.current_player = self.get_next_player()
-        #     self.set_current_piece(self.current_player.next_piece())
-        #     return True, "PASS"
-
         if not hasattr(self, "current_piece"):
-            return False, "INVALID"
+            return False
 
-        if action == Actions.ACTION_CYCLE_PIECE:  # select next piece
+        success = True
+
+        if action == Actions.ACTION_CYCLE_PIECE:
             self.set_current_piece(self.current_player.next_piece())
-            return True, "CYCLE"
-        elif action == Actions.ACTION_MOVE_LEFT:  # move_left
-            return self.move_piece_left(self.current_piece), "MOVE"
-        elif action == Actions.ACTION_MOVE_RIGHT:  # move_right
-            return self.move_piece_right(self.current_piece), "MOVE"
-        elif action == Actions.ACTION_ROTATE:  # rotate
-            return self.rotate_piece(self.current_piece), "CHANGE"
-        elif action == Actions.ACTION_FLIP:  # flip horizontally
-            return self.flip_piece(self.current_piece), "CHANGE"
-        elif action == Actions.ACTION_DROP:  # drop
+        elif action == Actions.ACTION_MOVE_LEFT:
+            success = self.move_piece_left(self.current_piece)
+        elif action == Actions.ACTION_MOVE_RIGHT:
+            success = self.move_piece_right(self.current_piece)
+        elif action == Actions.ACTION_ROTATE:
+            success = self.rotate_piece(self.current_piece)
+        elif action == Actions.ACTION_FLIP:
+            success = self.flip_piece(self.current_piece)
+        elif action == Actions.ACTION_DROP:
             success = self.play_drop_piece(self.current_piece, self.current_player)
             if success:
                 self.current_player = self.get_next_player()
-                self.set_current_piece(self.current_player.next_piece())
-                return success, "DROP"
-        return False, "INVALID"
+                self.start_turn()
+        else:
+            return False
 
-    def reset_piece_position(self):
-        """Reset the current piece to starting position (x=0, y=0)."""
-        if hasattr(self, "current_piece"):
-            self.current_piece.x = 0
-            self.current_piece.y = 0
+        self.update()
+        return success
+
+    def start_turn(self):
+        """Set up the current player's next piece to begin their turn.
+
+        Auto-passes a player who is blocked (has pieces but no valid placement),
+        granting the opponent one extra turn. Recursion is bounded by GAMEOVER.
+        """
+        if self.status == Game.GAMEOVER:
+            return
+
+        next_piece = self.current_player.next_piece()
+        if next_piece:
+            self.set_current_piece(next_piece)
+            if not self.player_has_valid_moves(self.current_player):
+                self.current_player.give_up()
+                remaining = self.get_players_in_play()
+                if not remaining:
+                    self.winner = self.check_for_winner()
+                elif self.one_extra_turn_remaining:
+                    self._declare_score_winner()
+                else:
+                    self.one_extra_turn_remaining = True
+                    self.current_player = self.get_next_player()
+                    self.start_turn()
+        else:
+            self.current_player.give_up()
