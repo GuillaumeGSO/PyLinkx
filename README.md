@@ -61,6 +61,14 @@ pytest tests/test_rl_env.py -v  # RL environment only
 pytest --cov=src                # With coverage
 ```
 
+### Web Build (itch.io)
+
+```bash
+python -m pygbag src/main.py
+```
+
+Opens a local server at `http://localhost:8000` — verify the game works in browser, then upload the generated `build/web/` folder to itch.io. Set the game kind to **HTML** and iframe dimensions to **600×600**.
+
 ## Project Structure
 
 ```

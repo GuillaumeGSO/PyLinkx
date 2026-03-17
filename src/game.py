@@ -329,3 +329,17 @@ class Game:
                     self.start_turn()
         else:
             self.current_player.give_up()
+
+    def force_pass(self):
+        """Give up the current player when they cannot make a valid move.
+        Only call when player is truly blocked (no valid placements exist)."""
+        self.current_player.give_up()
+        remaining = self.get_players_in_play()
+        if not remaining:
+            self.winner = self.check_for_winner()
+        elif self.one_extra_turn_remaining:
+            self._declare_score_winner()
+        else:
+            self.one_extra_turn_remaining = True
+            self.current_player = self.get_next_player()
+            self.start_turn()

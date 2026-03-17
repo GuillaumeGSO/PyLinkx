@@ -1,4 +1,5 @@
 pygame-ce
+pygbag
 pytest
 gymnasium>=0.29.0
 numpy>=1.24.0

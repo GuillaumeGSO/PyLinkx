@@ -110,16 +110,7 @@ class PyLinkxEnv(gym.Env):
         if forced_drop and not self.valid_action:
             if self.render_mode == "debug":
                 print("Forced drop failed. Auto-passing player.")
-            self.game.current_player.give_up()
-            remaining = self.game.get_players_in_play()
-            if not remaining:
-                self.game.winner = self.game.check_for_winner()
-            elif self.game.one_extra_turn_remaining:
-                self.game._declare_score_winner()
-            else:
-                self.game.one_extra_turn_remaining = True
-                self.game.current_player = self.game.get_next_player()
-                self.game.start_turn()
+            self.game.force_pass()
             self.valid_action = True
 
         # Reset turn counter on successful drop

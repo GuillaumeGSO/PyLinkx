@@ -1,5 +1,5 @@
+import asyncio
 import pygame
-import sys
 from game import Game, Actions
 from game_renderer import GameRenderer
 
@@ -7,7 +7,7 @@ from game_renderer import GameRenderer
 FPS = 10
 
 
-def main():
+async def main():
     pygame.init()
     screen = pygame.display.set_mode(
         (GameRenderer.SCREEN_WIDTH, GameRenderer.SCREEN_HEIGHT)
@@ -19,6 +19,7 @@ def main():
     renderer = GameRenderer(screen, game)
     game.start_turn()
     running = True
+    gameover_since = None  # ms timestamp when GAMEOVER first detected
 
     while running:
 
@@ -41,21 +42,26 @@ def main():
                         game.execute_action(Actions.ACTION_FLIP)
                     elif event.key == pygame.K_DOWN:
                         game.execute_action(Actions.ACTION_DROP)
+                    elif event.key == pygame.K_p:
+                        if not game.player_has_valid_moves(game.current_player):
+                            game.force_pass()
                 elif game.status == game.GAMEOVER:
-                    # should render button to reset game
-                    print("Game Over! Press R to Restart or ESC to Quit.")
-                    if event.key == pygame.K_r:
-                        game.reset()
-                        game.start_turn()
-                    elif event.key == pygame.K_ESCAPE:
-                        running = False
+                    elapsed = pygame.time.get_ticks() - gameover_since if gameover_since else 0
+                    if elapsed >= 3000:
+                        if event.key == pygame.K_r:
+                            game.reset()
+                            game.start_turn()
+                            gameover_since = None
+                        elif event.key == pygame.K_ESCAPE:
+                            running = False
+
+        if game.status == game.GAMEOVER and gameover_since is None:
+            gameover_since = pygame.time.get_ticks()
+
         renderer.draw()
         pygame.display.flip()
-        clock.tick(FPS)
-
-    pygame.quit()
-    sys.exit()
+        await asyncio.sleep(1.0 / FPS)
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
