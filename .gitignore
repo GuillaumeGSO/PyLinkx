@@ -24,3 +24,6 @@ Thumbs.db
 
 # Test and log files
 *.log
+
+# itch.io deploy config
+.itch.toml
