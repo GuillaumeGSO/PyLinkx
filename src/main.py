@@ -42,6 +42,9 @@ async def main():
                         game.execute_action(Actions.ACTION_FLIP)
                     elif event.key == pygame.K_DOWN:
                         game.execute_action(Actions.ACTION_DROP)
+                    elif event.key == pygame.K_p:
+                        if not game.player_has_valid_moves(game.current_player):
+                            game.force_pass()
                 elif game.status == game.GAMEOVER:
                     elapsed = pygame.time.get_ticks() - gameover_since if gameover_since else 0
                     if elapsed >= 3000:
