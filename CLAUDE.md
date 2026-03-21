@@ -9,8 +9,8 @@ PyLinkx is a two-player block placement game (on a 9x9 grid) with a Gymnasium RL
 ## Setup
 
 ```bash
-python3 -m venv venv
-source venv/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
@@ -19,7 +19,7 @@ pip install -r requirements.txt
 **Always activate the venv before running any Python command** — each Bash tool call is a fresh shell, so prefix every command with the activation:
 
 ```bash
-source venv/bin/activate && <command>
+source .venv/bin/activate && <command>
 ```
 
 ## Commands

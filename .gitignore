@@ -1,12 +1,12 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+.pytest_cache/
 build/
 *.py[cod]
 *$py.class
 
 # Virtual environment
 .venv/
-venv/
 
 # Pygame cache
 *.pyo
