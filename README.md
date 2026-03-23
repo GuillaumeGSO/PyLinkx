@@ -2,6 +2,9 @@
 
 PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasium RL environment for training reinforcement learning agents. Players place tetris-like pieces and win by connecting opposite borders (path win) or holding the largest contiguous area when all pieces are used (score win).
 
+![Screenshot](docs/Screenshot.png)
+
+
 ## Setup
 
 ```bash
