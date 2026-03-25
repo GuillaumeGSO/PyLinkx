@@ -59,7 +59,7 @@ def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
     max_steps: int = 500,
-    max_steps_by_turn: int = 100,
+    max_steps_by_turn: int = 20,
     envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
     render: bool = False,
@@ -115,13 +115,13 @@ def train_agent(
         env,
         verbose=1,
         learning_rate=3e-4,
-        n_steps=2048,
-        batch_size=128,
+        n_steps=4096,
+        batch_size=256,
         n_epochs=10,
-        gamma=0.999,
+        gamma=0.995,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.02,
+        ent_coef=0.01,
     )
 
     print("\n3. Starting training...")
@@ -149,7 +149,7 @@ def train_agent(
 
 
 def evaluate_agent(
-    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100, max_steps_by_turn: int = 100
+    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100, max_steps_by_turn: int = 20
 ):
     """
     Evaluate a trained agent.
@@ -324,8 +324,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--maxstepsbyturn",
         type=int,
-        default=100,
-        help="Maximum steps per turn before a drop is forced (default: 100)",
+        default=36,
+        help="Maximum steps per turn before a drop is forced (default: 20)",
     )
     parser.add_argument(
         "--model",

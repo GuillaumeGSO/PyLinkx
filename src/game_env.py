@@ -42,14 +42,14 @@ class PyLinkxEnv(gym.Env):
         # Scalars: player value, piece x, scores, can_drop flag, piece id,
         #          remaining ratio, game over flag, action validity,
         #          remaining turn ratio, padded piece shape (4x4=16),
-        #          edge touch flags: p1(left/right/top/bottom), p2(left/right/top/bottom)
+        #          path progress: p1(h, v, best, area), p2(h, v, best, area)
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0.0, high=1.0, shape=(9, 9, 1), dtype=np.float32),
                 "scalars": spaces.Box(low=-1.0, high=1.0, shape=(34,), dtype=np.float32),
             }
         )
-        self._touched_edges = set()  # Track (player_val, edge) first touches for shaping
+        self._path_progress = [[0.0, 0.0], [0.0, 0.0]]  # [player_idx][h, v] BFS progress
 
     def reset(self, *, seed: int | None = None, options: dict | None = None):
         """
@@ -64,7 +64,7 @@ class PyLinkxEnv(gym.Env):
         self.step_count = 0
         self.steps_for_current_turn = 0
         self.max_steps_by_turn = self._max_steps_by_turn
-        self._touched_edges = set()
+        self._path_progress = [[0.0, 0.0], [0.0, 0.0]]
         self.valid_action = True
         self._score_delta = 0.0
 
@@ -100,6 +100,7 @@ class PyLinkxEnv(gym.Env):
         # Capture pre-action state for reward shaping
         acting_player_idx = self.game.players.index(self.game.current_player)
         old_score = self.game.players[acting_player_idx].score
+        old_progress = list(self._path_progress[acting_player_idx])
         # Execute the action (update() is called inside execute_action)
         self.valid_action = self.game.execute_action(action)
         self._score_delta = self.game.players[acting_player_idx].score - old_score
@@ -113,16 +114,20 @@ class PyLinkxEnv(gym.Env):
             self.game.force_pass()
             self.valid_action = True
 
-        # Reset turn counter on successful drop
+        # Reset turn counter on successful drop; update path progress cache
+        progress_delta = (0.0, 0.0)
         if action == Actions.ACTION_DROP and self.valid_action:
             self.steps_for_current_turn = 0
+            new_progress = self._compute_path_progress(acting_player_idx)
+            self._path_progress[acting_player_idx] = list(new_progress)
+            progress_delta = (new_progress[0] - old_progress[0], new_progress[1] - old_progress[1])
 
         # Check if game is over (invalid action no longer terminates episode)
         terminated = self.game.status == Game.GAMEOVER
 
         # Calculate reward using acting player (current_player may have changed after DROP)
         reward = self._calculate_reward(
-            acting_player_idx, self.valid_action, action, terminated, self._score_delta, forced_drop
+            acting_player_idx, self.valid_action, action, terminated, self._score_delta, forced_drop, progress_delta
         )
 
         # Get next observation
@@ -163,22 +168,19 @@ class PyLinkxEnv(gym.Env):
         padded[:rows, :cols] = np.array(shape)
         return padded.flatten()  # Returns 16 scalars
 
-    def _get_edge_flags(self) -> np.ndarray:
+    def _get_path_progress_scalars(self) -> np.ndarray:
         """
-        Returns 8 binary float32 values: one per player per edge direction.
-        [p1_left, p1_right, p1_top, p1_bottom, p2_left, p2_right, p2_top, p2_bottom]
-        A flag is 1.0 if any of the player's cells touches that grid edge, else 0.0.
+        Returns 8 continuous float32 values representing BFS path progress per player.
+        [p1_h, p1_v, p1_best, p1_area, p2_h, p2_v, p2_best, p2_area]
+        h/v: fraction of grid crossed in horizontal/vertical direction (0–1).
+        best: max(h, v). area: largest contiguous group / 81.
         """
-        grid = np.array(self.game.grid, dtype=np.int8)
-        g = self.game.GRID_SIZE - 1
-        flags = []
-        for player_val in (1, 2):
-            mask = grid == player_val
-            flags.append(float(np.any(mask[:, 0])))   # touches left  (col 0)
-            flags.append(float(np.any(mask[:, g])))   # touches right (col g)
-            flags.append(float(np.any(mask[0, :])))   # touches top   (row 0)
-            flags.append(float(np.any(mask[g, :])))   # touches bottom (row g)
-        return np.array(flags, dtype=np.float32)
+        grid_cells = float(self.game.GRID_SIZE * self.game.GRID_SIZE)
+        result = []
+        for i, player in enumerate(self.game.players):
+            h, v = self._path_progress[i]
+            result.extend([h, v, max(h, v), float(player.score) / grid_cells])
+        return np.array(result, dtype=np.float32)
 
     def _get_observation(self) -> dict:
         """
@@ -218,12 +220,12 @@ class PyLinkxEnv(gym.Env):
 
         remaining_actions_ratio = (self.max_steps_by_turn - self.steps_for_current_turn) / self.max_steps_by_turn
 
-        # Concatenate into a single (34,) array: 9 scalars + 1 ratio + 16 shape + 8 edge flags
+        # Concatenate into a single (34,) array: 9 scalars + 1 ratio + 16 shape + 8 path progress
         scalars = np.concatenate([
             other_scalars,
             [remaining_actions_ratio],
             shape_vals,
-            self._get_edge_flags(),   # idx 27-34: p1/p2 edge touch flags
+            self._get_path_progress_scalars(),  # idx 26-33: p1/p2 BFS path progress
         ])
 
         return {"grid": grid_array, "scalars": scalars}
@@ -242,28 +244,83 @@ class PyLinkxEnv(gym.Env):
             "action_valid": action_valid,
         }
 
-    def _edge_touch_bonus(self, player_idx: int) -> float:
-        """Return bonus for first-time edge touches by this player after a drop."""
+    def _compute_path_progress(self, player_idx: int) -> tuple[float, float]:
+        """
+        BFS path progress for a player. Returns (h_progress, v_progress).
+
+        Horizontal (symmetric): best of left→right or right→left frontier, normalized to [0, 1].
+        Vertical (bottom-only): how far up from the bottom the connected component reaches.
+        """
         player_val = self.game.players[player_idx].value
-        grid = np.array(self.game.grid, dtype=np.int8)
-        g = self.game.GRID_SIZE - 1
-        mask = grid == player_val
-        edge_checks = [
-            ("left",   bool(np.any(mask[:, 0]))),
-            ("right",  bool(np.any(mask[:, g]))),
-            ("top",    bool(np.any(mask[0, :]))),
-            ("bottom", bool(np.any(mask[g, :]))),
-        ]
-        bonus = 0.0
-        for edge, touched in edge_checks:
-            key = (player_val, edge)
-            if touched and key not in self._touched_edges:
-                self._touched_edges.add(key)
-                bonus += 2.0
-        return bonus
+        grid = self.game.grid
+        G = self.game.GRID_SIZE
+        g = G - 1
+
+        # Horizontal: seed from left edge, track max col reached
+        h_from_left = -1
+        start = [(r, 0) for r in range(G) if grid[r][0] == player_val]
+        if start:
+            visited = set(start)
+            stack = list(start)
+            while stack:
+                r, c = stack.pop()
+                if c > h_from_left:
+                    h_from_left = c
+                for dr in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
+                            visited.add((nr, nc))
+                            stack.append((nr, nc))
+
+        # Horizontal: seed from right edge, track min col reached
+        h_from_right = G
+        start = [(r, g) for r in range(G) if grid[r][g] == player_val]
+        if start:
+            min_col = g
+            visited = set(start)
+            stack = list(start)
+            while stack:
+                r, c = stack.pop()
+                if c < min_col:
+                    min_col = c
+                for dr in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
+                            visited.add((nr, nc))
+                            stack.append((nr, nc))
+            h_from_right = min_col
+
+        h_progress = max(
+            h_from_left / g if h_from_left >= 0 else 0.0,
+            (g - h_from_right) / g if h_from_right < G else 0.0,
+        )
+
+        # Vertical: seed from bottom edge only, track min row reached
+        v_progress = 0.0
+        start = [(g, c) for c in range(G) if grid[g][c] == player_val]
+        if start:
+            min_row = g
+            visited = set(start)
+            stack = list(start)
+            while stack:
+                r, c = stack.pop()
+                if r < min_row:
+                    min_row = r
+                for dr in (-1, 0, 1):
+                    for dc in (-1, 0, 1):
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
+                            visited.add((nr, nc))
+                            stack.append((nr, nc))
+            v_progress = (g - min_row) / g
+
+        return (h_progress, v_progress)
 
     def _calculate_reward(
-        self, player_idx: int, action_valid: bool, action: int, terminated: bool, score_delta: float = 0.0, forced_drop: bool = False
+        self, player_idx: int, action_valid: bool, action: int, terminated: bool,
+        score_delta: float = 0.0, forced_drop: bool = False, progress_delta: tuple[float, float] = (0.0, 0.0)
     ) -> float:
         """
         Calculate reward for the current action.
@@ -279,7 +336,7 @@ class PyLinkxEnv(gym.Env):
                 return -20.0
         # In play rewards/penalties
         if action == Actions.ACTION_DROP:
-            base = 1.0 + self._edge_touch_bonus(player_idx)
+            base = 1.0 + (progress_delta[0] + progress_delta[1]) * 10.0
             return base - 0.5 if forced_drop else base
         if action == Actions.ACTION_CYCLE_PIECE:
             return -0.05
