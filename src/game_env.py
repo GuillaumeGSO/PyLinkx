@@ -1,4 +1,5 @@
 # Gymnasium RL Environment for PyLinkx
+import os
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
@@ -11,14 +12,15 @@ class PyLinkxEnv(gym.Env):
     """
     Gymnasium environment wrapper for the PyLinkx game.
 
-    Single-agent mode: Agent plays against itself or a fixed opponent.
-    Supports both training and evaluation.
+    Single-agent mode: Agent plays as Player 1. Player 2 is controlled by
+    a frozen opponent model or a drop-first fallback policy.
     """
 
     metadata = {"render_modes": ["debug"], "render_fps": 8}
     PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
 
-    def __init__(self, render_mode=None, max_steps=500, max_steps_by_turn=100):
+    def __init__(self, render_mode=None, max_steps=500, max_steps_by_turn=100,
+                 opponent_model_path=None):
         """
         Initialize the PyLinkx Gymnasium environment.
 
@@ -26,6 +28,8 @@ class PyLinkxEnv(gym.Env):
             render_mode: Rendering mode (None or "debug")
             max_steps: Maximum steps per episode to prevent infinite loops
             max_steps_by_turn: Maximum steps allowed per turn before a drop is forced
+            opponent_model_path: Path to a saved MaskablePPO model for P2.
+                If None or file missing, P2 uses a drop-first fallback policy.
         """
         self.render_mode = render_mode
         self.max_steps = max_steps
@@ -33,6 +37,12 @@ class PyLinkxEnv(gym.Env):
         self.step_count = 0
         self.valid_action = True
         self.game = Game()
+
+        # Opponent model for Player 2
+        self._opponent_model = None
+        if opponent_model_path and os.path.exists(opponent_model_path):
+            from sb3_contrib import MaskablePPO
+            self._opponent_model = MaskablePPO.load(opponent_model_path)
 
         # Action space: 6 discrete actions (0-5)
         self.action_space = spaces.Discrete(len(Actions))
@@ -67,9 +77,14 @@ class PyLinkxEnv(gym.Env):
         self._path_progress = [[0.0, 0.0], [0.0, 0.0]]
         self.valid_action = True
         self._score_delta = 0.0
+        self._p2_drops = 0
 
         # Initialize first piece
         self.game.start_turn()
+
+        # If P1 got auto-passed (edge case), play P2's turn
+        if self.game.status != Game.GAMEOVER and self.game.players.index(self.game.current_player) != 0:
+            self._play_opponent_turn()
 
         observation = self._get_observation()
         info = self._get_info()
@@ -130,6 +145,14 @@ class PyLinkxEnv(gym.Env):
             acting_player_idx, self.valid_action, action, terminated, self._score_delta, forced_drop, progress_delta
         )
 
+        # After P1's action, if it's now P2's turn, play P2's turn internally
+        if not terminated and self.game.players.index(self.game.current_player) != 0:
+            self._play_opponent_turn()
+            # Re-check termination (P2 might have won during their turn)
+            terminated = self.game.status == Game.GAMEOVER
+            if terminated and self.game.winner and self.game.winner != self.game.players[0]:
+                reward = -100.0 if self.game.win_type == "path" else -20.0
+
         # Get next observation
         observation = self._get_observation()
         info = self._get_info(self.valid_action)
@@ -158,6 +181,45 @@ class PyLinkxEnv(gym.Env):
             int(piece is not None and self.game.can_flip(piece)),
             int(self.game.can_drop()),
         ], dtype=np.int8)
+
+    def _get_opponent_action(self) -> int:
+        """Get P2's next action using opponent model or drop-first fallback."""
+        mask = self.valid_action_mask()
+        if self._opponent_model is not None:
+            obs = self._get_observation()
+            action, _ = self._opponent_model.predict(obs, deterministic=False, action_masks=mask)
+            return int(action)
+        # Drop-first: drop immediately when possible, otherwise random valid action
+        if mask[Actions.ACTION_DROP]:
+            return Actions.ACTION_DROP
+        valid_indices = np.where(mask == 1)[0]
+        return int(np.random.choice(valid_indices))
+
+    def _play_opponent_turn(self):
+        """Play P2's turn(s) internally until it's P1's turn or game ends."""
+        opponent_steps = 0
+        while (self.game.status != Game.GAMEOVER
+               and self.game.players.index(self.game.current_player) != 0
+               and self.step_count < self.max_steps):
+
+            opponent_steps += 1
+            self.step_count += 1
+
+            if opponent_steps >= self._max_steps_by_turn:
+                success = self.game.execute_action(Actions.ACTION_DROP)
+                if not success:
+                    self.game.force_pass()
+                break
+
+            action = self._get_opponent_action()
+            self.game.execute_action(action)
+
+            if action == Actions.ACTION_DROP:
+                self._p2_drops += 1
+                # Update P2's path progress cache
+                p2_idx = 1
+                self._path_progress[p2_idx] = list(self._compute_path_progress(p2_idx))
+                opponent_steps = 0  # Reset for next piece if P2 has another turn
 
     def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
         """Pads any piece shape into a fixed 4x4 array."""
@@ -242,6 +304,7 @@ class PyLinkxEnv(gym.Env):
             "win_type": self.game.win_type,  # 'path' or 'score' or None
             "step_count": self.step_count,
             "action_valid": action_valid,
+            "p2_drops": self._p2_drops,
         }
 
     def _compute_path_progress(self, player_idx: int) -> tuple[float, float]:

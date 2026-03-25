@@ -16,7 +16,10 @@ import numpy as np
 import sys
 from pathlib import Path
 import pygame
+import torch as th
+import torch.nn as nn
 from stable_baselines3.common.monitor import Monitor
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 # Add parent directory to path for relative imports
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -33,17 +36,58 @@ from stable_baselines3.common.vec_env import VecNormalize
 from game_env import Actions, PyLinkxEnv
 
 
+class PyLinkxFeaturesExtractor(BaseFeaturesExtractor):
+    """Custom feature extractor: CNN for 9x9 grid + MLP for scalars."""
+
+    def __init__(self, observation_space, features_dim=192):
+        super().__init__(observation_space, features_dim)
+
+        self.grid_cnn = nn.Sequential(
+            nn.Conv2d(1, 32, kernel_size=3, stride=1, padding=1),   # -> 32x9x9
+            nn.ReLU(),
+            nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1),  # -> 64x9x9
+            nn.ReLU(),
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),  # -> 64x7x7
+            nn.ReLU(),
+            nn.Flatten(),
+        )
+        self.grid_linear = nn.Sequential(
+            nn.Linear(64 * 7 * 7, 128),
+            nn.ReLU(),
+        )
+
+        scalar_dim = observation_space.spaces["scalars"].shape[0]
+        self.scalar_net = nn.Sequential(
+            nn.Linear(scalar_dim, 64),
+            nn.ReLU(),
+        )
+
+    def forward(self, observations):
+        grid = observations["grid"].permute(0, 3, 1, 2)  # HWC -> CHW
+        grid_features = self.grid_linear(self.grid_cnn(grid))
+        scalar_features = self.scalar_net(observations["scalars"])
+        return th.cat([grid_features, scalar_features], dim=1)
+
+
+def linear_schedule(initial_value: float):
+    """Linear decay from initial_value to 0."""
+    def func(progress_remaining: float) -> float:
+        return progress_remaining * initial_value
+    return func
+
+
 class RenderOnBestCallback(BaseCallback):
-    def __init__(self, max_steps: int, max_steps_by_turn: int):
+    def __init__(self, max_steps: int, max_steps_by_turn: int, opponent_model_path: str | None = None):
         super().__init__(verbose=0)
         self._max_steps = max_steps
         self._max_steps_by_turn = max_steps_by_turn
+        self._opponent_model_path = opponent_model_path
         self._render_proc: subprocess.Popen | None = None
 
     def _on_step(self) -> bool:
         if self._render_proc and self._render_proc.poll() is None:
             return True  # previous render still running, skip
-        self._render_proc = subprocess.Popen([
+        cmd = [
             sys.executable, __file__,
             "--mode", "evaluate",
             "--model", "models/best_model.zip",
@@ -51,7 +95,10 @@ class RenderOnBestCallback(BaseCallback):
             "--render",
             "--maxsteps", str(self._max_steps),
             "--maxstepsbyturn", str(self._max_steps_by_turn),
-        ])
+        ]
+        if self._opponent_model_path:
+            cmd.extend(["--opponent-model", self._opponent_model_path])
+        self._render_proc = subprocess.Popen(cmd)
         return True
 
 
@@ -63,6 +110,7 @@ def train_agent(
     envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
     render: bool = False,
+    opponent_model_path: str | None = None,
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -73,6 +121,7 @@ def train_agent(
         model_save_path: Path to save the trained model
         max_steps: Maximum steps per episode to prevent infinite loops
         max_steps_by_turn: Maximum steps per turn before a drop is forced
+        opponent_model_path: Path to opponent model for P2 (None = drop-first fallback)
     """
     print("=" * 60)
     print("PyLinkx RL Training Script")
@@ -84,12 +133,15 @@ def train_agent(
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
+    opponent_desc = opponent_model_path or "drop-first fallback"
     print(f"Using {n_envs} parallel environments (CPU cores: {os.cpu_count()})")
+    print(f"Opponent: {opponent_desc}")
     def make_masked_env(**kwargs):
         env = PyLinkxEnv(**kwargs)
         return ActionMasker(env, lambda e: e.valid_action_mask())
 
-    env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn}
+    env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn,
+                  "opponent_model_path": opponent_model_path}
     env = make_vec_env(make_masked_env, n_envs=n_envs, env_kwargs=env_kwargs, wrapper_class=Monitor)
     env = VecNormalize(env, norm_reward=True, norm_obs=False)
 
@@ -98,7 +150,7 @@ def train_agent(
     eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
 
     # Setup evaluation callback
-    render_callback = RenderOnBestCallback(max_steps, max_steps_by_turn) if render else None
+    render_callback = RenderOnBestCallback(max_steps, max_steps_by_turn, opponent_model_path) if render else None
     eval_callback = EvalCallback(
         eval_env,
         callback_on_new_best=render_callback,
@@ -110,18 +162,24 @@ def train_agent(
 
     # Create and train the agent
     print("2. Creating MaskablePPO agent...")
+    policy_kwargs = {
+        "features_extractor_class": PyLinkxFeaturesExtractor,
+        "features_extractor_kwargs": {"features_dim": 192},
+        "normalize_images": False,
+    }
     model = MaskablePPO(
-        "MultiInputPolicy",  # Multi-layer perceptron policy
+        "MultiInputPolicy",
         env,
         verbose=1,
-        learning_rate=3e-4,
+        learning_rate=linear_schedule(3e-4),
         n_steps=4096,
         batch_size=256,
         n_epochs=10,
         gamma=0.995,
         gae_lambda=0.95,
         clip_range=0.2,
-        ent_coef=0.01,
+        ent_coef=0.05,
+        policy_kwargs=policy_kwargs,
     )
 
     print("\n3. Starting training...")
@@ -149,16 +207,18 @@ def train_agent(
 
 
 def evaluate_agent(
-    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100, max_steps_by_turn: int = 20
+    model_path: str, num_episodes: int = 10, render: bool = False, max_steps: int = 100,
+    max_steps_by_turn: int = 20, opponent_model_path: str | None = None,
 ):
     """
-    Evaluate a trained agent.
+    Evaluate a trained agent (P1) against an opponent (P2).
 
     Args:
         model_path: Path to the trained model
         num_episodes: Number of evaluation episodes
         render: Whether to render episodes
         max_steps_by_turn: Maximum steps per turn before a drop is forced
+        opponent_model_path: Path to opponent model for P2 (None = drop-first fallback)
     """
     print("\n" + "=" * 60)
     print("Evaluating Agent")
@@ -169,12 +229,14 @@ def evaluate_agent(
     model = MaskablePPO.load(model_path)
 
     # Create evaluation environment
-    env = PyLinkxEnv(render_mode="debug" if render else None, max_steps=max_steps, max_steps_by_turn=max_steps_by_turn)
+    env = PyLinkxEnv(
+        render_mode="debug" if render else None, max_steps=max_steps,
+        max_steps_by_turn=max_steps_by_turn, opponent_model_path=opponent_model_path,
+    )
 
     episode_rewards = []
     episode_lengths = []
-    p1_turns = []
-    p2_turns = []
+    p2_drops_list = []
 
     print(f"\n2. Running {num_episodes} evaluation episodes...")
     print("-" * 60)
@@ -198,19 +260,10 @@ def evaluate_agent(
         episode_reward = 0
         episode_length = 0
         done = False
-        ep_p1_turns = 0
-        ep_p2_turns = 0
 
         while not done:
-            current_player = info["current_player_idx"]
             action_masks = env.valid_action_mask()
-            if current_player == 0:  # Agent plays as player 1
-                action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
-                ep_p1_turns += 1
-            else:
-                action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
-                ep_p2_turns += 1
-
+            action, _ = model.predict(obs, deterministic=True, action_masks=action_masks)
             obs, reward, terminated, truncated, info = env.step(int(action))
             episode_reward += reward
             episode_length += 1
@@ -224,12 +277,13 @@ def evaluate_agent(
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
-        p1_turns.append(ep_p1_turns)
-        p2_turns.append(ep_p2_turns)
+        p2_drops_list.append(info.get("p2_drops", 0))
 
+        winner = "P1" if info.get("winner_idx") == 0 else ("P2" if info.get("winner_idx") == 1 else "None")
         print(
             f"   Episode {episode + 1:3d}: Reward = {episode_reward:7.2f}, "
-            f"Length = {episode_length:4d}, P1 Turns = {ep_p1_turns}, P2 Turns = {ep_p2_turns}"
+            f"Length = {episode_length:4d}, P2 Drops = {info.get('p2_drops', 0)}, "
+            f"Winner = {winner} ({info.get('win_type', '-')})"
         )
 
     # Print statistics
@@ -245,8 +299,7 @@ def evaluate_agent(
     )
     print(f"   Max Reward:      {np.max(episode_rewards):.2f}")
     print(f"   Min Reward:      {np.min(episode_rewards):.2f}")
-    print(f"   Mean P1 Turns:   {np.mean(p1_turns):.1f} ± {np.std(p1_turns):.1f}")
-    print(f"   Mean P2 Turns:   {np.mean(p2_turns):.1f} ± {np.std(p2_turns):.1f}")
+    print(f"   Mean P2 Drops:   {np.mean(p2_drops_list):.1f} ± {np.std(p2_drops_list):.1f}")
 
     env.close()
 
@@ -254,8 +307,7 @@ def evaluate_agent(
         "rewards": episode_rewards,
         "lengths": episode_lengths,
         "mean_reward": np.mean(episode_rewards),
-        "p1_turns": p1_turns,
-        "p2_turns": p2_turns,
+        "p2_drops": p2_drops_list,
     }
 
 
@@ -343,6 +395,11 @@ if __name__ == "__main__":
         action="store_true",
         help="Render evaluation episodes",
     )
+    parser.add_argument(
+        "--opponent-model",
+        default=None,
+        help="Path to opponent model for P2 (default: drop-first fallback)",
+    )
 
     args = parser.parse_args()
 
@@ -356,6 +413,7 @@ if __name__ == "__main__":
             max_steps_by_turn=args.maxstepsbyturn,
             envs=args.envs,
             render=args.render,
+            opponent_model_path=args.opponent_model,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":
@@ -365,5 +423,6 @@ if __name__ == "__main__":
             max_steps=args.maxsteps,
             max_steps_by_turn=args.maxstepsbyturn,
             render=args.render,
+            opponent_model_path=args.opponent_model,
         )
         print("\n✓ Evaluation completed!")
