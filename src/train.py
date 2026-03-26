@@ -125,7 +125,7 @@ class GameMetricsCallback(BaseCallback):
             obs, info = env.reset()
             done = False
             while not done:
-                action_masks = env.valid_action_mask()
+                action_masks = env.unwrapped.valid_action_mask()
                 action, _ = self.model.predict(obs, deterministic=True, action_masks=action_masks)
                 obs, reward, terminated, truncated, info = env.step(int(action))
                 done = terminated or truncated
