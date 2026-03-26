@@ -171,7 +171,7 @@ def train_agent(
         "MultiInputPolicy",
         env,
         verbose=1,
-        learning_rate=linear_schedule(3e-4),
+        learning_rate=3e-4, #linear_schedule(3e-4),
         n_steps=4096,
         batch_size=256,
         n_epochs=10,

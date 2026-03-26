@@ -41,18 +41,23 @@ python src/main.py
 # Verify environment works
 python src/train.py --mode test
 
-# Train a PPO agent
-python src/train.py --mode train --timesteps 100000 --envs 4 --maxsteps 100
+# Train against drop-first fallback P2 (first loop)
+python src/train.py --mode train --timesteps 4000000
+
+# Train against a frozen opponent model (iterative self-play)
+python src/train.py --mode train --timesteps 4000000 --opponent-model models/best_model.zip
 
 # Evaluate a trained model
-python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10 --render
+python src/train.py --mode evaluate --model models/best_model.zip --eval-episodes 200 --render
 ```
 
 **Training options:**
 - `--timesteps`: Number of training steps (default: 100000)
-- `--envs`: Number of parallel environments (default: 4)
-- `--maxsteps`: Max steps per episode (default: 100)
+- `--envs`: Number of parallel environments (default: CPU cores − 1)
+- `--maxsteps`: Max steps per episode (default: 500)
+- `--maxstepsbyturn`: Max steps per turn before forced drop (default: 36)
 - `--model`: Path to save/load model (default: `models/ppo_pylinkx.zip`)
+- `--opponent-model`: Path to opponent model for P2 (default: drop-first fallback)
 - `--eval-episodes`: Number of evaluation episodes (default: 100)
 - `--render`: Show game visualization during evaluation
 
@@ -113,41 +118,67 @@ Opens a local server at `http://localhost:8000` — verify the game works in bro
 `Dict` with two components:
 
 - **`grid`**: `Box(9, 9, 1)` — game grid normalized to `[0.0, 0.5, 1.0]` (empty / player 1 / player 2)
-- **`scalars`**: `Box(27,)` — 27 normalized scalar features:
-  - Player value, piece x position, player 1 score, ghost y (−1 if no valid drop)
-  - Piece type id, remaining pieces ratio, ghost presence flag, player 2 score
-  - Game over flag, last action validity, remaining turn steps ratio
-  - Current piece shape padded to 4×4 (16 values)
+- **`scalars`**: `Box(34,)` — 34 normalized scalar features including piece position, scores, path progress, piece shape, and game state
 
 ### Reward Structure
 
+Agent plays as P1 only. P2 is controlled internally by a frozen opponent model or a drop-first fallback.
+
 | Event | Reward |
 |-------|--------|
-| Path win | +10.0 |
-| Score win | +7.5 |
-| Loss | −7.5 |
-| Drop (place piece) | +0.1 + 0.01 × score_delta |
-| Forced drop (procrastination penalty) | −0.05 |
-| Invalid action | −1.0 |
-| Per step | −0.001 |
+| P1 path win | +100.0 |
+| P1 score win | +20.0 |
+| P2 path win (P1 loses) | −100.0 |
+| P2 score win (P1 loses) | −20.0 |
+| Drop (place piece) | +1.0 + path progress bonus |
+| Invalid action | −0.1 |
+| Cycle piece | −0.05 |
+| Other actions | −0.001 |
 
-### Training Configuration (PPO)
+### Training Configuration (MaskablePPO)
 
 | Hyperparameter | Value |
 |---------------|-------|
 | Policy | MultiInputPolicy |
-| Learning rate | 3e-4 |
-| n_steps | 2048 |
-| batch_size | 128 |
+| Features extractor | Custom CNN (2×Conv2d) + MLP for scalars |
+| Learning rate | 3e-4 (constant) |
+| n_steps | 4096 |
+| batch_size | 256 |
 | n_epochs | 10 |
-| gamma | 0.999 |
-| ent_coef | 0.02 |
-| Reward normalization | VecNormalize |
+| gamma | 0.995 |
+| ent_coef | 0.05 |
+| Reward normalization | VecNormalize (rewards only) |
+| Action masking | sb3-contrib MaskablePPO |
+
+### Iterative Self-Play Training
+
+The agent is trained through an iterative self-play curriculum:
+
+1. **Loop 1**: Train P1 against a "drop-first" fallback P2 (drops immediately when valid, otherwise random valid action)
+2. **Loop 2+**: Train a fresh P1 against the best model from the previous loop as P2
+3. Each generation learns to beat the previous one, progressively getting stronger
+
+The opponent model is loaded into memory at environment creation — it stays fixed during training even as `best_model.zip` is updated on disk by the EvalCallback.
+
+#### Training Results
+
+| Loop | Timesteps | Opponent | P1 Win % | P1 Path | P1 Score | P2 Path | P2 Score | Mean Reward |
+|------|-----------|----------|----------|---------|----------|---------|----------|-------------|
+| 1 | 1M | drop-first | — | — | — | — | — | (baseline) |
+| 2 | 2M | loop1 model | 72.7% | 37.3% | 35.3% | 9.3% | 18.0% | 43.34 |
+| 3 | 2M | loop2 model | 69.5% | 30.5% | 39.0% | 8.5% | 22.0% | 34.05 |
+| 4 | 4M | loop3 model | 78.0% | ~51% | ~27% | ~12% | ~10% | 56.78 |
+
+Key trends:
+- Win rate climbing against increasingly stronger opponents (72.7% → 78%)
+- Agent increasingly favors **path wins** (37% → 51%), the stronger win condition
+- Longer training runs (4M vs 2M) produce noticeably better results
 
 ## Dependencies
 
 - **pygame-ce** — game rendering and UI (Community Edition, with WebAssembly support)
 - **gymnasium** — RL environment standard
 - **numpy** — numerical computing
-- **stable-baselines3** — PPO implementation
+- **sb3-contrib** — MaskablePPO with action masking
+- **stable-baselines3** — PPO base implementation
 - **pytest** — testing framework
