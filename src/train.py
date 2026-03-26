@@ -30,7 +30,7 @@ from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
 from sb3_contrib.common.maskable.utils import get_action_masks
 from stable_baselines3.common.env_util import make_vec_env
-from stable_baselines3.common.callbacks import EvalCallback, BaseCallback
+from stable_baselines3.common.callbacks import EvalCallback, BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import VecNormalize
 
 from game_env import Actions, PyLinkxEnv
@@ -102,6 +102,56 @@ class RenderOnBestCallback(BaseCallback):
         return True
 
 
+class GameMetricsCallback(BaseCallback):
+    """Logs game-specific metrics (win rate, path/score splits) to TensorBoard."""
+
+    def __init__(self, eval_env_kwargs: dict, n_eval_episodes: int = 20,
+                 eval_freq: int = 5000, verbose: int = 0):
+        super().__init__(verbose)
+        self._eval_env_kwargs = eval_env_kwargs
+        self._n_eval_episodes = n_eval_episodes
+        self._eval_freq = eval_freq
+
+    def _on_step(self) -> bool:
+        if self.n_calls % self._eval_freq != 0:
+            return True
+
+        env = PyLinkxEnv(**self._eval_env_kwargs)
+        env = ActionMasker(env, lambda e: e.valid_action_mask())
+
+        wins, path_wins, score_wins, losses, total_p2_drops = 0, 0, 0, 0, 0
+
+        for _ in range(self._n_eval_episodes):
+            obs, info = env.reset()
+            done = False
+            while not done:
+                action_masks = env.valid_action_mask()
+                action, _ = self.model.predict(obs, deterministic=True, action_masks=action_masks)
+                obs, reward, terminated, truncated, info = env.step(int(action))
+                done = terminated or truncated
+
+            if info.get("winner_idx") == 0:
+                wins += 1
+                if info.get("win_type") == "path":
+                    path_wins += 1
+                else:
+                    score_wins += 1
+            elif info.get("winner_idx") == 1:
+                losses += 1
+            total_p2_drops += info.get("p2_drops", 0)
+
+        env.close()
+
+        n = self._n_eval_episodes
+        self.logger.record("game/win_rate", wins / n)
+        self.logger.record("game/path_win_rate", path_wins / n)
+        self.logger.record("game/score_win_rate", score_wins / n)
+        self.logger.record("game/loss_rate", losses / n)
+        self.logger.record("game/mean_p2_drops", total_p2_drops / n)
+
+        return True
+
+
 def train_agent(
     total_timesteps: int = 100_000,
     eval_episodes: int = 100,
@@ -111,6 +161,7 @@ def train_agent(
     model_save_path: str = "models/ppo_pylinkx.zip",
     render: bool = False,
     opponent_model_path: str | None = None,
+    game_eval_freq: int = 10000,
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -122,6 +173,7 @@ def train_agent(
         max_steps: Maximum steps per episode to prevent infinite loops
         max_steps_by_turn: Maximum steps per turn before a drop is forced
         opponent_model_path: Path to opponent model for P2 (None = drop-first fallback)
+        game_eval_freq: How often (in timesteps) to run game metrics evaluation
     """
     print("=" * 60)
     print("PyLinkx RL Training Script")
@@ -155,10 +207,18 @@ def train_agent(
         eval_env,
         callback_on_new_best=render_callback,
         best_model_save_path="./models/",
-        eval_freq=5000,
+        log_path="./logs/",
+        eval_freq=max(1, 5000 // n_envs),
         n_eval_episodes=eval_episodes,
         deterministic=True,
     )
+
+    game_metrics_callback = GameMetricsCallback(
+        eval_env_kwargs=env_kwargs,
+        eval_freq=max(1, game_eval_freq // n_envs),
+    )
+
+    callbacks = CallbackList([eval_callback, game_metrics_callback])
 
     # Create and train the agent
     print("2. Creating MaskablePPO agent...")
@@ -180,17 +240,19 @@ def train_agent(
         clip_range=0.2,
         ent_coef=0.05,
         policy_kwargs=policy_kwargs,
+        tensorboard_log="./logs",
     )
 
     print("\n3. Starting training...")
     print(f"   Total timesteps: {total_timesteps}")
     print(f"   Parallel environments: {n_envs}")
+    print(f"   TensorBoard: tensorboard --logdir logs")
     print("-" * 60)
 
     try:
         model.learn(
             total_timesteps=total_timesteps,
-            callback=eval_callback,
+            callback=callbacks,
             progress_bar=True,
         )
     except KeyboardInterrupt:
@@ -400,6 +462,12 @@ if __name__ == "__main__":
         default=None,
         help="Path to opponent model for P2 (default: drop-first fallback)",
     )
+    parser.add_argument(
+        "--game-eval-freq",
+        type=int,
+        default=10000,
+        help="How often (in timesteps) to log game metrics to TensorBoard (default: 10000)",
+    )
 
     args = parser.parse_args()
 
@@ -414,6 +482,7 @@ if __name__ == "__main__":
             envs=args.envs,
             render=args.render,
             opponent_model_path=args.opponent_model,
+            game_eval_freq=args.game_eval_freq,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":

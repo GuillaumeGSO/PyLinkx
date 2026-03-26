@@ -60,6 +60,27 @@ python src/train.py --mode evaluate --model models/best_model.zip --eval-episode
 - `--opponent-model`: Path to opponent model for P2 (default: drop-first fallback)
 - `--eval-episodes`: Number of evaluation episodes (default: 100)
 - `--render`: Show game visualization during evaluation
+- `--game-eval-freq`: How often (in timesteps) to log game metrics to TensorBoard (default: 10000)
+
+### TensorBoard Monitoring
+
+Training automatically logs metrics to TensorBoard. Launch it in a separate terminal while training runs:
+
+```bash
+tensorboard --logdir logs
+# Open http://localhost:6006
+```
+
+Available panels:
+
+| Panel | Metrics |
+|-------|---------|
+| eval/ | mean_reward, mean_ep_length |
+| rollout/ | ep_rew_mean, ep_len_mean |
+| train/ | explained_variance, entropy_loss, value_loss, learning_rate, clip_fraction |
+| game/ | win_rate, path_win_rate, score_win_rate, loss_rate, mean_p2_drops |
+
+The `game/` metrics come from a mini-evaluation (20 episodes) run every `--game-eval-freq` steps, giving real-time visibility into win rates and strategy distribution.
 
 ### Tests
 
