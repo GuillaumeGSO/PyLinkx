@@ -189,11 +189,26 @@ The opponent model is loaded into memory at environment creation — it stays fi
 | 2 | 2M | loop1 model | 72.7% | 37.3% | 35.3% | 9.3% | 18.0% | 43.34 |
 | 3 | 2M | loop2 model | 69.5% | 30.5% | 39.0% | 8.5% | 22.0% | 34.05 |
 | 4 | 4M | loop3 model | 78.0% | ~51% | ~27% | ~12% | ~10% | 56.78 |
+| 5 | 6M | loop4 model | 68.5% | 53.0% | 15.5% | 12.5% | 19.0% | 49.82 |
 
 Key trends:
-- Win rate climbing against increasingly stronger opponents (72.7% → 78%)
-- Agent increasingly favors **path wins** (37% → 51%), the stronger win condition
-- Longer training runs (4M vs 2M) produce noticeably better results
+- Path win rate steadily climbing (37% → 53%), showing the agent increasingly favors the stronger win condition
+- Win rate holds 68–78% against progressively stronger opponents — lower % doesn't mean weaker agent
+- Score wins declining as path strategy dominates (35% → 15.5%)
+- Longer training runs (4M+) produce noticeably better results
+- Diminishing returns observed at loop 5 — may indicate a plateau in the current architecture/reward setup
+
+## Roadmap
+
+**Goal**: Add a game menu where the player chooses to play against a human (current mode) or against one of three AI difficulty levels:
+
+| Difficulty | Description |
+|------------|-------------|
+| Easy | Early-loop model (basic piece placement, minimal strategy) |
+| Medium | Mid-loop model (decent area control, some path attempts) |
+| Hard | Best available model (strong path-building strategy) |
+
+This requires training many models through the self-play curriculum, evaluating them, and selecting three that provide distinct difficulty levels for a human player. The training pipeline will be automated to version models per loop, evaluate against multiple baselines, and detect when improvement plateaus.
 
 ## Dependencies
 
