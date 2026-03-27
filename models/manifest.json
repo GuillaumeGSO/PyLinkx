@@ -1,0 +1,18 @@
+{
+  "baseline_model": "models/base_line_model.zip",
+  "loops": [
+    {
+      "loop": 0,
+      "model_path": "models/base_line_model.zip",
+      "opponent": "legacy",
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": null,
+      "win_rate_vs_baseline": null,
+      "path_win_rate_vs_baseline": null,
+      "score_win_rate_vs_baseline": null,
+      "mean_reward_vs_baseline": null,
+      "note": "baseline model \u2014 win_rate_vs_baseline is null by definition"
+    }
+  ],
+  "difficulty_models": null
+}

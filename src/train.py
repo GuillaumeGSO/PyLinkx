@@ -103,14 +103,31 @@ class RenderOnBestCallback(BaseCallback):
 
 
 class GameMetricsCallback(BaseCallback):
-    """Logs game-specific metrics (win rate, path/score splits) to TensorBoard."""
+    """Logs game-specific metrics (win rate, path/score splits) to TensorBoard.
+
+    When baseline_model_path is provided, the eval env uses it as the opponent
+    (instead of the training pool) for a stable, comparable plateau signal.
+    """
 
     def __init__(self, eval_env_kwargs: dict, n_eval_episodes: int = 20,
-                 eval_freq: int = 20000, verbose: int = 0):
+                 eval_freq: int = 20000, baseline_model_path: str | None = None,
+                 min_timesteps: int = 0, plateau_window: int = 5,
+                 plateau_threshold: float = 0.02, verbose: int = 0):
         super().__init__(verbose)
-        self._eval_env_kwargs = eval_env_kwargs
         self._n_eval_episodes = n_eval_episodes
         self._eval_freq = eval_freq
+        self._min_timesteps = min_timesteps
+        self._plateau_window = plateau_window
+        self._plateau_threshold = plateau_threshold
+        self._win_rate_history: list[float] = []
+
+        # Use baseline model as fixed eval opponent if provided, else use training kwargs
+        if baseline_model_path:
+            base_kwargs = {k: v for k, v in eval_env_kwargs.items()
+                          if k not in ("opponent_model_path", "opponent_model_paths", "opponent_weights")}
+            self._eval_env_kwargs = {**base_kwargs, "opponent_model_path": baseline_model_path}
+        else:
+            self._eval_env_kwargs = eval_env_kwargs
 
     def _on_step(self) -> bool:
         if self.n_calls % self._eval_freq != 0:
@@ -143,11 +160,23 @@ class GameMetricsCallback(BaseCallback):
         env.close()
 
         n = self._n_eval_episodes
-        self.logger.record("game/win_rate", wins / n)
+        win_rate = wins / n
+        self.logger.record("game/win_rate", win_rate)
         self.logger.record("game/path_win_rate", path_wins / n)
         self.logger.record("game/score_win_rate", score_wins / n)
         self.logger.record("game/loss_rate", losses / n)
         self.logger.record("game/mean_p2_drops", total_p2_drops / n)
+
+        # Plateau detection
+        self._win_rate_history.append(win_rate)
+        if (self._min_timesteps > 0
+                and self.num_timesteps >= self._min_timesteps
+                and len(self._win_rate_history) >= self._plateau_window):
+            recent = self._win_rate_history[-self._plateau_window:]
+            if max(recent) - min(recent) < self._plateau_threshold:
+                print(f"\n[Plateau] Win rate stable at {win_rate:.2f} over last "
+                      f"{self._plateau_window} evals — stopping early.")
+                return False
 
         return True
 
@@ -159,9 +188,15 @@ def train_agent(
     max_steps_by_turn: int = 20,
     envs: int = max(1, (os.cpu_count() or 4) - 1),
     model_save_path: str = "models/ppo_pylinkx.zip",
+    model_save_dir: str | None = None,
     render: bool = False,
     opponent_model_path: str | None = None,
+    opponent_model_paths: list[str] | None = None,
     game_eval_freq: int = 10000,
+    baseline_model_path: str | None = None,
+    min_timesteps: int = 0,
+    plateau_window: int = 5,
+    plateau_threshold: float = 0.02,
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -179,21 +214,34 @@ def train_agent(
     print("PyLinkx RL Training Script")
     print("=" * 60)
 
-    # Create output directory
-    Path(model_save_path).parent.mkdir(parents=True, exist_ok=True)
+    # Resolve save directory and paths
+    if model_save_dir:
+        os.makedirs(model_save_dir, exist_ok=True)
+        model_save_path = os.path.join(model_save_dir, "ppo_pylinkx.zip")
+        best_model_save_path = model_save_dir
+    else:
+        Path(model_save_path).parent.mkdir(parents=True, exist_ok=True)
+        best_model_save_path = str(Path(model_save_path).parent)
 
     # Create a vectorized environment (for parallel training)
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
-    opponent_desc = opponent_model_path or "drop-first fallback"
+    if opponent_model_paths:
+        opponent_desc = f"pool of {len(opponent_model_paths)} models (linear weights)"
+    else:
+        opponent_desc = opponent_model_path or "drop-first fallback"
     print(f"Using {n_envs} parallel environments (CPU cores: {os.cpu_count()})")
     print(f"Opponent: {opponent_desc}")
     def make_masked_env(**kwargs):
         env = PyLinkxEnv(**kwargs)
         return ActionMasker(env, lambda e: e.valid_action_mask())
 
-    env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn,
-                  "opponent_model_path": opponent_model_path}
+    if opponent_model_paths:
+        env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn,
+                      "opponent_model_paths": opponent_model_paths}
+    else:
+        env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn,
+                      "opponent_model_path": opponent_model_path}
     env = make_vec_env(make_masked_env, n_envs=n_envs, env_kwargs=env_kwargs, wrapper_class=Monitor)
     env = VecNormalize(env, norm_reward=True, norm_obs=False)
 
@@ -206,7 +254,7 @@ def train_agent(
     eval_callback = EvalCallback(
         eval_env,
         callback_on_new_best=render_callback,
-        best_model_save_path="./models/",
+        best_model_save_path=best_model_save_path,
         log_path="./logs/",
         eval_freq=max(1, 5000 // n_envs),
         n_eval_episodes=eval_episodes,
@@ -216,6 +264,10 @@ def train_agent(
     game_metrics_callback = GameMetricsCallback(
         eval_env_kwargs=env_kwargs,
         eval_freq=max(1, game_eval_freq // n_envs),
+        baseline_model_path=baseline_model_path,
+        min_timesteps=min_timesteps,
+        plateau_window=plateau_window,
+        plateau_threshold=plateau_threshold,
     )
 
     callbacks = CallbackList([eval_callback, game_metrics_callback])
@@ -299,6 +351,7 @@ def evaluate_agent(
     episode_rewards = []
     episode_lengths = []
     p2_drops_list = []
+    wins, path_wins, score_wins, losses = 0, 0, 0, 0
 
     print(f"\n2. Running {num_episodes} evaluation episodes...")
     print("-" * 60)
@@ -341,6 +394,15 @@ def evaluate_agent(
         episode_lengths.append(episode_length)
         p2_drops_list.append(info.get("p2_drops", 0))
 
+        if info.get("winner_idx") == 0:
+            wins += 1
+            if info.get("win_type") == "path":
+                path_wins += 1
+            else:
+                score_wins += 1
+        elif info.get("winner_idx") == 1:
+            losses += 1
+
         winner = "P1" if info.get("winner_idx") == 0 else ("P2" if info.get("winner_idx") == 1 else "None")
         print(
             f"   Episode {episode + 1:3d}: Reward = {episode_reward:7.2f}, "
@@ -365,10 +427,15 @@ def evaluate_agent(
 
     env.close()
 
+    n = num_episodes
     return {
+        "win_rate": wins / n,
+        "path_win_rate": path_wins / n,
+        "score_win_rate": score_wins / n,
+        "loss_rate": losses / n,
+        "mean_reward": float(np.mean(episode_rewards)),
         "rewards": episode_rewards,
         "lengths": episode_lengths,
-        "mean_reward": np.mean(episode_rewards),
         "p2_drops": p2_drops_list,
     }
 
@@ -447,6 +514,11 @@ if __name__ == "__main__":
         help="Path to model file",
     )
     parser.add_argument(
+        "--model-save-dir",
+        default=None,
+        help="Directory to save model and best_model (overrides --model path, used by pipeline)",
+    )
+    parser.add_argument(
         "--eval-episodes",
         type=int,
         default=100,
@@ -463,10 +535,39 @@ if __name__ == "__main__":
         help="Path to opponent model for P2 (default: drop-first fallback)",
     )
     parser.add_argument(
+        "--opponent-models",
+        nargs="+",
+        default=None,
+        help="Paths to a pool of opponent models (sampled with linear weights, used by pipeline)",
+    )
+    parser.add_argument(
         "--game-eval-freq",
         type=int,
         default=10000,
         help="How often (in timesteps) to log game metrics to TensorBoard (default: 10000)",
+    )
+    parser.add_argument(
+        "--baseline-model",
+        default=None,
+        help="Fixed reference model for plateau detection eval (default: uses training opponent)",
+    )
+    parser.add_argument(
+        "--min-timesteps",
+        type=int,
+        default=0,
+        help="Minimum timesteps before plateau detection activates (default: 0 = disabled)",
+    )
+    parser.add_argument(
+        "--plateau-window",
+        type=int,
+        default=5,
+        help="Number of game evals to check for plateau (default: 5)",
+    )
+    parser.add_argument(
+        "--plateau-threshold",
+        type=float,
+        default=0.02,
+        help="Max win rate range within window to declare plateau (default: 0.02)",
     )
 
     args = parser.parse_args()
@@ -477,12 +578,18 @@ if __name__ == "__main__":
         trained_model = train_agent(
             total_timesteps=args.timesteps,
             model_save_path=args.model,
+            model_save_dir=args.model_save_dir,
             max_steps=args.maxsteps,
             max_steps_by_turn=args.maxstepsbyturn,
             envs=args.envs,
             render=args.render,
             opponent_model_path=args.opponent_model,
+            opponent_model_paths=args.opponent_models,
             game_eval_freq=args.game_eval_freq,
+            baseline_model_path=args.baseline_model,
+            min_timesteps=args.min_timesteps,
+            plateau_window=args.plateau_window,
+            plateau_threshold=args.plateau_threshold,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":

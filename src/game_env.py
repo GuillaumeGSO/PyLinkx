@@ -7,6 +7,148 @@ import pygame
 from game import Game, Actions
 from game_renderer import GameRenderer
 
+PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
+
+
+def compute_action_mask(game) -> np.ndarray:
+    """Returns a binary mask (1=valid, 0=invalid) for all 6 actions."""
+    piece = game.current_piece if hasattr(game, "current_piece") else None
+    return np.array([
+        1,
+        int(piece is not None and game.can_move_piece(piece, dx=-1)),
+        int(piece is not None and game.can_move_piece(piece, dx=1)),
+        int(piece is not None and game.can_rotate(piece)),
+        int(piece is not None and game.can_flip(piece)),
+        int(game.can_drop()),
+    ], dtype=np.int8)
+
+
+def compute_path_progress(game, player_idx: int) -> tuple[float, float]:
+    """BFS path progress for a player. Returns (h_progress, v_progress)."""
+    player_val = game.players[player_idx].value
+    grid = game.grid
+    G = game.GRID_SIZE
+    g = G - 1
+
+    h_from_left = -1
+    start = [(r, 0) for r in range(G) if grid[r][0] == player_val]
+    if start:
+        visited = set(start)
+        stack = list(start)
+        while stack:
+            r, c = stack.pop()
+            if c > h_from_left:
+                h_from_left = c
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
+                        visited.add((nr, nc))
+                        stack.append((nr, nc))
+
+    h_from_right = G
+    start = [(r, g) for r in range(G) if grid[r][g] == player_val]
+    if start:
+        min_col = g
+        visited = set(start)
+        stack = list(start)
+        while stack:
+            r, c = stack.pop()
+            if c < min_col:
+                min_col = c
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
+                        visited.add((nr, nc))
+                        stack.append((nr, nc))
+        h_from_right = min_col
+
+    h_progress = max(
+        h_from_left / g if h_from_left >= 0 else 0.0,
+        (g - h_from_right) / g if h_from_right < G else 0.0,
+    )
+
+    v_progress = 0.0
+    start = [(g, c) for c in range(G) if grid[g][c] == player_val]
+    if start:
+        min_row = g
+        visited = set(start)
+        stack = list(start)
+        while stack:
+            r, c = stack.pop()
+            if r < min_row:
+                min_row = r
+            for dr in (-1, 0, 1):
+                for dc in (-1, 0, 1):
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
+                        visited.add((nr, nc))
+                        stack.append((nr, nc))
+        v_progress = (g - min_row) / g
+
+    return (h_progress, v_progress)
+
+
+def build_observation(game, max_steps_by_turn: int, steps_for_current_turn: int,
+                      last_action_valid: bool, path_progress=None) -> dict:
+    """
+    Build the observation dict from game state.
+
+    path_progress: [[h0, v0], [h1, v1]] cached BFS values per player.
+    If None, BFS is computed fresh for both players.
+    """
+    if path_progress is None:
+        path_progress = [
+            list(compute_path_progress(game, 0)),
+            list(compute_path_progress(game, 1)),
+        ]
+
+    grid_array = np.array(game.grid, dtype=np.float32) / 2.0
+    grid_array = np.expand_dims(grid_array, axis=-1)
+
+    current_piece = game.current_piece
+    nb_players = len(game.players)
+    max_pieces = 2 * len(PIECE_MAP)
+    current_piece_id = float(PIECE_MAP[current_piece.shape_name]) / len(PIECE_MAP)
+    remaining_ratio = float(len(game.current_player.pieces)) / max_pieces
+    grid_cells = float(game.GRID_SIZE * game.GRID_SIZE)
+    player_scores = [float(p.score) / grid_cells for p in game.players]
+
+    other_scalars = np.array([
+        float(game.current_player.value - 1) / (nb_players - 1),
+        float(current_piece.x) / game.GRID_SIZE,
+        player_scores[0],
+        float(1.0 if game.ghost_grid_y else 0.0),
+        current_piece_id,
+        remaining_ratio,
+        player_scores[1],
+        float(game.status == Game.GAMEOVER),
+        float(last_action_valid),
+    ], dtype=np.float32)
+
+    padded = np.zeros((4, 4), dtype=np.float32)
+    shape = current_piece.shape
+    rows, cols = len(shape), len(shape[0])
+    padded[:rows, :cols] = np.array(shape)
+    shape_vals = padded.flatten()
+
+    remaining_actions_ratio = (max_steps_by_turn - steps_for_current_turn) / max_steps_by_turn
+
+    path_scalars = []
+    for i, player in enumerate(game.players):
+        h, v = path_progress[i]
+        path_scalars.extend([h, v, max(h, v), float(player.score) / grid_cells])
+
+    scalars = np.concatenate([
+        other_scalars,
+        [remaining_actions_ratio],
+        shape_vals,
+        np.array(path_scalars, dtype=np.float32),
+    ])
+
+    return {"grid": grid_array, "scalars": scalars}
+
 
 class PyLinkxEnv(gym.Env):
     """
@@ -17,10 +159,10 @@ class PyLinkxEnv(gym.Env):
     """
 
     metadata = {"render_modes": ["debug"], "render_fps": 8}
-    PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
+    PIECE_MAP = PIECE_MAP
 
     def __init__(self, render_mode=None, max_steps=500, max_steps_by_turn=100,
-                 opponent_model_path=None):
+                 opponent_model_path=None, opponent_model_paths=None, opponent_weights=None):
         """
         Initialize the PyLinkx Gymnasium environment.
 
@@ -28,7 +170,9 @@ class PyLinkxEnv(gym.Env):
             render_mode: Rendering mode (None or "debug")
             max_steps: Maximum steps per episode to prevent infinite loops
             max_steps_by_turn: Maximum steps allowed per turn before a drop is forced
-            opponent_model_path: Path to a saved MaskablePPO model for P2.
+            opponent_model_path: Path to a single MaskablePPO model for P2 (backwards-compatible).
+            opponent_model_paths: List of model paths to sample from (weighted pool).
+            opponent_weights: Sampling weights for opponent_model_paths (linear if None).
                 If None or file missing, P2 uses a drop-first fallback policy.
         """
         self.render_mode = render_mode
@@ -40,7 +184,14 @@ class PyLinkxEnv(gym.Env):
 
         # Opponent model for Player 2
         self._opponent_model = None
-        if opponent_model_path and os.path.exists(opponent_model_path):
+        if opponent_model_paths:
+            import random
+            from sb3_contrib import MaskablePPO
+            weights = opponent_weights or list(range(1, len(opponent_model_paths) + 1))
+            sampled = random.choices(opponent_model_paths, weights=weights, k=1)[0]
+            if os.path.exists(sampled):
+                self._opponent_model = MaskablePPO.load(sampled)
+        elif opponent_model_path and os.path.exists(opponent_model_path):
             from sb3_contrib import MaskablePPO
             self._opponent_model = MaskablePPO.load(opponent_model_path)
 
@@ -172,15 +323,7 @@ class PyLinkxEnv(gym.Env):
 
     def valid_action_mask(self) -> np.ndarray:
         """Returns a binary mask (1=valid, 0=invalid) for MaskablePPO."""
-        piece = self.game.current_piece if hasattr(self.game, "current_piece") else None
-        return np.array([
-            1,  # CYCLE — always valid
-            int(piece is not None and self.game.can_move_piece(piece, dx=-1)),
-            int(piece is not None and self.game.can_move_piece(piece, dx=1)),
-            int(piece is not None and self.game.can_rotate(piece)),
-            int(piece is not None and self.game.can_flip(piece)),
-            int(self.game.can_drop()),
-        ], dtype=np.int8)
+        return compute_action_mask(self.game)
 
     def _flip_observation_perspective(self, obs: dict) -> dict:
         """Flip observation so an opponent model (trained as P1) sees P2's perspective as its own."""
@@ -240,76 +383,11 @@ class PyLinkxEnv(gym.Env):
                 self._path_progress[p2_idx] = list(self._compute_path_progress(p2_idx))
                 opponent_steps = 0  # Reset for next piece if P2 has another turn
 
-    def _get_padded_shape(self, shape: list[list[int]]) -> np.ndarray:
-        """Pads any piece shape into a fixed 4x4 array."""
-        padded = np.zeros((4, 4), dtype=np.float32)
-        rows = len(shape)
-        cols = len(shape[0])
-        # Place the shape in the top-left of the 4x4 grid
-        padded[:rows, :cols] = np.array(shape)
-        return padded.flatten()  # Returns 16 scalars
-
-    def _get_path_progress_scalars(self) -> np.ndarray:
-        """
-        Returns 8 continuous float32 values representing BFS path progress per player.
-        [p1_h, p1_v, p1_best, p1_area, p2_h, p2_v, p2_best, p2_area]
-        h/v: fraction of grid crossed in horizontal/vertical direction (0–1).
-        best: max(h, v). area: largest contiguous group / 81.
-        """
-        grid_cells = float(self.game.GRID_SIZE * self.game.GRID_SIZE)
-        result = []
-        for i, player in enumerate(self.game.players):
-            h, v = self._path_progress[i]
-            result.extend([h, v, max(h, v), float(player.score) / grid_cells])
-        return np.array(result, dtype=np.float32)
-
     def _get_observation(self) -> dict:
-        """
-        Captures the grid for pathfinding (border connection)
-        and scalars for the current game state.
-        """
-        # 1. Grid (9, 9, 1) - Normalized to [0.0, 0.5, 1.0]
-        # The CNN will learn to detect 'chains' of 1s or 2s across the grid.
-        grid_array = np.array(self.game.grid, dtype=np.float32) / 2.0
-        grid_array = np.expand_dims(grid_array, axis=-1)
-
-        # 2. Contextual Scalars
-        current_piece = self.game.current_piece
-        nb_players = len(self.game.players)
-        max_pieces = 2 * len(self.PIECE_MAP)
-        current_piece_id = float(self.PIECE_MAP[current_piece.shape_name]) / len(self.PIECE_MAP)
-        remaining_ratio = float(len(self.game.current_player.pieces)) / max_pieces
-        grid_cells = float(self.game.GRID_SIZE * self.game.GRID_SIZE)
-        player_scores = [float(p.score) / grid_cells for p in self.game.players]
-
-        other_scalars = np.array(
-            [
-                float(self.game.current_player.value - 1) / (nb_players - 1),  # Normalized to [0, 1]
-                float(current_piece.x) / self.game.GRID_SIZE,  # Normalized x position
-                player_scores[0],  # Player 1 score normalized
-                float(1.0 if self.game.ghost_grid_y else 0.0),  # Can drop flag (1.0 if valid drop position exists)
-                current_piece_id,  # Normalized piece type id
-                remaining_ratio,  # Fraction of pieces remaining
-                player_scores[1],  # Player 2 score normalized
-                float(self.game.status == Game.GAMEOVER),  # Game over flag
-                float(self.valid_action),  # Last action validity
-            ],
-            dtype=np.float32,
+        return build_observation(
+            self.game, self.max_steps_by_turn, self.steps_for_current_turn,
+            self.valid_action, self._path_progress,
         )
-        # 3. Padded piece shape (4x4 = 16 values)
-        shape_vals = self._get_padded_shape(current_piece.shape)
-
-        remaining_actions_ratio = (self.max_steps_by_turn - self.steps_for_current_turn) / self.max_steps_by_turn
-
-        # Concatenate into a single (34,) array: 9 scalars + 1 ratio + 16 shape + 8 path progress
-        scalars = np.concatenate([
-            other_scalars,
-            [remaining_actions_ratio],
-            shape_vals,
-            self._get_path_progress_scalars(),  # idx 26-33: p1/p2 BFS path progress
-        ])
-
-        return {"grid": grid_array, "scalars": scalars}
 
     def _get_info(self, action_valid=None) -> dict:
         """Get additional information about the environment state."""
@@ -327,78 +405,7 @@ class PyLinkxEnv(gym.Env):
         }
 
     def _compute_path_progress(self, player_idx: int) -> tuple[float, float]:
-        """
-        BFS path progress for a player. Returns (h_progress, v_progress).
-
-        Horizontal (symmetric): best of left→right or right→left frontier, normalized to [0, 1].
-        Vertical (bottom-only): how far up from the bottom the connected component reaches.
-        """
-        player_val = self.game.players[player_idx].value
-        grid = self.game.grid
-        G = self.game.GRID_SIZE
-        g = G - 1
-
-        # Horizontal: seed from left edge, track max col reached
-        h_from_left = -1
-        start = [(r, 0) for r in range(G) if grid[r][0] == player_val]
-        if start:
-            visited = set(start)
-            stack = list(start)
-            while stack:
-                r, c = stack.pop()
-                if c > h_from_left:
-                    h_from_left = c
-                for dr in (-1, 0, 1):
-                    for dc in (-1, 0, 1):
-                        nr, nc = r + dr, c + dc
-                        if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
-                            visited.add((nr, nc))
-                            stack.append((nr, nc))
-
-        # Horizontal: seed from right edge, track min col reached
-        h_from_right = G
-        start = [(r, g) for r in range(G) if grid[r][g] == player_val]
-        if start:
-            min_col = g
-            visited = set(start)
-            stack = list(start)
-            while stack:
-                r, c = stack.pop()
-                if c < min_col:
-                    min_col = c
-                for dr in (-1, 0, 1):
-                    for dc in (-1, 0, 1):
-                        nr, nc = r + dr, c + dc
-                        if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
-                            visited.add((nr, nc))
-                            stack.append((nr, nc))
-            h_from_right = min_col
-
-        h_progress = max(
-            h_from_left / g if h_from_left >= 0 else 0.0,
-            (g - h_from_right) / g if h_from_right < G else 0.0,
-        )
-
-        # Vertical: seed from bottom edge only, track min row reached
-        v_progress = 0.0
-        start = [(g, c) for c in range(G) if grid[g][c] == player_val]
-        if start:
-            min_row = g
-            visited = set(start)
-            stack = list(start)
-            while stack:
-                r, c = stack.pop()
-                if r < min_row:
-                    min_row = r
-                for dr in (-1, 0, 1):
-                    for dc in (-1, 0, 1):
-                        nr, nc = r + dr, c + dc
-                        if 0 <= nr < G and 0 <= nc < G and (nr, nc) not in visited and grid[nr][nc] == player_val:
-                            visited.add((nr, nc))
-                            stack.append((nr, nc))
-            v_progress = (g - min_row) / g
-
-        return (h_progress, v_progress)
+        return compute_path_progress(self.game, player_idx)
 
     def _calculate_reward(
         self, player_idx: int, action_valid: bool, action: int, terminated: bool,
