@@ -106,7 +106,7 @@ class GameMetricsCallback(BaseCallback):
     """Logs game-specific metrics (win rate, path/score splits) to TensorBoard."""
 
     def __init__(self, eval_env_kwargs: dict, n_eval_episodes: int = 20,
-                 eval_freq: int = 5000, verbose: int = 0):
+                 eval_freq: int = 20000, verbose: int = 0):
         super().__init__(verbose)
         self._eval_env_kwargs = eval_env_kwargs
         self._n_eval_episodes = n_eval_episodes
