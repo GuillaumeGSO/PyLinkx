@@ -23,6 +23,7 @@ build/
 Thumbs.db
 
 # Test and log files
+logs/
 *.log
 
 # itch.io deploy config

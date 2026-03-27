@@ -40,8 +40,11 @@ pytest --cov=src
 # Test the RL environment setup
 python src/train.py --mode test
 
-# Train a PPO agent
+# Train a PPO agent (P2 = drop-first fallback)
 python src/train.py --mode train --timesteps 100000 --envs 4 --maxsteps 100
+
+# Train with opponent model (iterative self-play)
+python src/train.py --mode train --timesteps 100000 --opponent-model models/ppo_pylinkx.zip
 
 # Evaluate a trained model
 python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10 --render
@@ -59,8 +62,8 @@ The codebase is split into pure game logic and the RL wrapper:
 - `main.py` — Interactive entry point using Pygame event loop.
 
 **RL layer**:
-- `game_env.py` — `PyLinkxEnv(gym.Env)`: wraps `Game` into a Gymnasium environment. Observation space is `Dict{"grid": Box(9,9,1), "scalars": Box(27,)}`. Action space is `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop). Reward: +2000 path win, +1500 score win, +10 per drop, −50 invalid action, −0.1 per step.
-- `train.py` — Training script using Stable-Baselines3 PPO with `MultiInputPolicy`. Supports `--mode test|train|evaluate`.
+- `game_env.py` — `PyLinkxEnv(gym.Env)`: wraps `Game` into a Gymnasium environment. Agent plays as P1 only; P2 is controlled internally by a frozen opponent model (`opponent_model_path`) or a drop-first fallback. Observation space is `Dict{"grid": Box(9,9,1), "scalars": Box(34,)}`. Action space is `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop). Reward (P1 perspective): +100 path win, +20 score win, −100/−20 P2 wins, +1.0 per drop + path progress bonus, −0.1 invalid, −0.05 cycle, −0.001 other.
+- `train.py` — Training script using sb3-contrib MaskablePPO with custom `PyLinkxFeaturesExtractor` (CNN for grid + MLP for scalars). Supports `--mode test|train|evaluate` and `--opponent-model` for iterative self-play.
 
 **Key design constraint**: `pytest.ini` sets `pythonpath = src`, so all imports within `src/` use bare module names (e.g., `from game import Game`, not `from src.game import Game`). Tests must follow this same pattern.
 
@@ -100,7 +103,7 @@ All tests should pass. If any fail after a change:
 3. **Stale test** — update the test to match the current implementation. Common patterns:
    - Observation is `dict` with keys `"grid"` and `"scalars"` — use `obs["grid"].shape`, not `obs.shape`
    - Imports inside `tests/` must use bare module names (`from game import Game`, not `from src.game import Game`) — mismatched import paths cause `isinstance` to silently return `False`
-   - Reward values are large integers (±2000/1500/50/10/0.1) — not normalized to ±1
+   - Reward values: ±100/20 for wins/losses, +1.0 per drop, −0.1 invalid, −0.05 cycle, −0.001 other
    - `_calculate_reward(player_idx, action_valid, action, terminated)` requires all 4 arguments; `action` is an `Actions` int, not a string
 4. **Real regression** — fix the source code, then re-run validation.
 
