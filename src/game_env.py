@@ -182,11 +182,30 @@ class PyLinkxEnv(gym.Env):
             int(self.game.can_drop()),
         ], dtype=np.int8)
 
+    def _flip_observation_perspective(self, obs: dict) -> dict:
+        """Flip observation so an opponent model (trained as P1) sees P2's perspective as its own."""
+        grid = obs["grid"].copy()
+        # Swap P1 cells (0.5) and P2 cells (1.0); empty (0.0) stays
+        p1_mask = grid == 0.5
+        p2_mask = grid == 1.0
+        grid[p1_mask] = 1.0
+        grid[p2_mask] = 0.5
+
+        scalars = obs["scalars"].copy()
+        scalars[0] = 0.0                        # current_player → P1 perspective
+        scalars[2], scalars[6] = scalars[6], scalars[2]  # swap P1/P2 scores
+        p1_progress = scalars[26:30].copy()      # swap P1/P2 path progress
+        scalars[26:30] = scalars[30:34]
+        scalars[30:34] = p1_progress
+
+        return {"grid": grid, "scalars": scalars}
+
     def _get_opponent_action(self) -> int:
         """Get P2's next action using opponent model or drop-first fallback."""
         mask = self.valid_action_mask()
         if self._opponent_model is not None:
             obs = self._get_observation()
+            obs = self._flip_observation_perspective(obs)
             action, _ = self._opponent_model.predict(obs, deterministic=False, action_masks=mask)
             return int(action)
         # Drop-first: drop immediately when possible, otherwise random valid action
