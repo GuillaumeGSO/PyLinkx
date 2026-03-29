@@ -8,8 +8,11 @@ Used to validate Easy/Medium/Hard model selection before committing.
 Usage:
     # Explicit model list
     python src/evaluate_matrix.py \
-      --models models/base_line_model.zip models/loop_6/best_model.zip models/loop_7/best_model.zip \
-      --labels baseline loop6 loop7 \
+      --models models/base_line_model.zip models/loop_1/best_model.zip \
+        models/loop_2/best_model.zip \
+        models/loop_3/best_model.zip \
+        models/loop_4/best_model.zip \
+      --labels baseline loop1 loop2 loop3 loop4 \
       --episodes 200
 
     # Pull all loops from manifest

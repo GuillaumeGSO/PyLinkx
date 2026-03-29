@@ -9,9 +9,9 @@ Usage:
     python src/pipeline.py \
       --max-loops 10 \
       --timesteps 4000000 \
-      --min-timesteps 1000000 \
+      --min-timesteps 1000000 \     #Remove this line (or 0) to disable plateau check
       --cross-loop-threshold 0.55 \
-      --eval-episodes 500 \
+      --eval-episodes 300 \
       --envs 7 \
       --baseline-model models/base_line_model.zip
 """
@@ -30,7 +30,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from train import evaluate_agent
 
 MANIFEST_PATH = "models/manifest.json"
-BASELINE_LOOP = 5
+BASELINE_LOOP = 0
 
 
 def load_manifest() -> dict:
@@ -74,13 +74,13 @@ def bootstrap_manifest(baseline_model: str) -> dict:
 
 
 def append_loop_to_manifest(manifest: dict, loop_n: int, model_path: str,
-                             opponent_pool: list[str], results_vs_prev: dict,
-                             results_vs_baseline: dict):
+                             opponent_pool: list[str], timesteps: int,
+                             results_vs_prev: dict, results_vs_baseline: dict):
     entry = {
         "loop": loop_n,
         "model_path": model_path,
         "opponent_pool": opponent_pool,
-        "timesteps_trained": None,  # not tracked at subprocess level
+        "timesteps_trained": timesteps,
         "win_rate_vs_prev": results_vs_prev["win_rate"],
         "win_rate_vs_baseline": results_vs_baseline["win_rate"],
         "path_win_rate_vs_baseline": results_vs_baseline["path_win_rate"],
@@ -208,7 +208,7 @@ def main():
     # Determine starting loop
     existing_loops = [e["loop"] for e in manifest["loops"]]
     start_loop = args.start_loop or (max(existing_loops) + 1 if existing_loops else BASELINE_LOOP + 1)
-    end_loop = BASELINE_LOOP + args.max_loops  # loop 6 through loop 5+max_loops
+    end_loop = start_loop + args.max_loops - 1
 
     print(f"\n[Pipeline] Starting from loop {start_loop}, max loop {end_loop}")
     print(f"[Pipeline] Baseline: {args.baseline_model}")
@@ -219,6 +219,7 @@ def main():
         pool = [e["model_path"] for e in manifest["loops"]]
         model_save_dir = f"models/loop_{loop_n}"
         best_model_path = os.path.join(model_save_dir, "best_model.zip")
+        fallback_model_path = os.path.join(model_save_dir, "ppo_pylinkx.zip")
 
         # Train
         success = run_training_loop(loop_n, model_save_dir, pool, args)
@@ -227,8 +228,12 @@ def main():
             break
 
         if not os.path.exists(best_model_path):
-            print(f"[Pipeline] Expected model not found: {best_model_path}. Stopping.")
-            break
+            if os.path.exists(fallback_model_path):
+                print(f"[Loop {loop_n}] No best_model.zip found, using ppo_pylinkx.zip as fallback.")
+                best_model_path = fallback_model_path
+            else:
+                print(f"[Pipeline] No model found in {model_save_dir}. Stopping.")
+                break
 
         # Evaluate vs previous loop (for cross-loop stopping)
         prev_model = manifest["loops"][-1]["model_path"]
@@ -253,7 +258,7 @@ def main():
 
         # Update manifest
         append_loop_to_manifest(manifest, loop_n, best_model_path, pool,
-                                 results_vs_prev, results_vs_baseline)
+                                 args.timesteps, results_vs_prev, results_vs_baseline)
 
         print(f"\n[Loop {loop_n}] win_rate_vs_prev={results_vs_prev['win_rate']:.1%}  "
               f"win_rate_vs_baseline={results_vs_baseline['win_rate']:.1%}")

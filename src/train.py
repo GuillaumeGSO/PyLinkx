@@ -192,7 +192,7 @@ def train_agent(
     render: bool = False,
     opponent_model_path: str | None = None,
     opponent_model_paths: list[str] | None = None,
-    game_eval_freq: int = 10000,
+    game_eval_freq: int = 20_000,
     baseline_model_path: str | None = None,
     min_timesteps: int = 0,
     plateau_window: int = 5,
@@ -256,14 +256,14 @@ def train_agent(
         callback_on_new_best=render_callback,
         best_model_save_path=best_model_save_path,
         log_path="./logs/",
-        eval_freq=max(1, 5000 // n_envs),
+        eval_freq=game_eval_freq,
         n_eval_episodes=eval_episodes,
         deterministic=True,
     )
 
     game_metrics_callback = GameMetricsCallback(
         eval_env_kwargs=env_kwargs,
-        eval_freq=max(1, game_eval_freq // n_envs),
+        eval_freq=game_eval_freq,
         baseline_model_path=baseline_model_path,
         min_timesteps=min_timesteps,
         plateau_window=plateau_window,
