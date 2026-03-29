@@ -48,6 +48,12 @@ python src/train.py --mode train --timesteps 100000 --opponent-model models/ppo_
 
 # Evaluate a trained model
 python src/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10 --render
+
+# Run the self-play training pipeline
+python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip
+
+# Evaluate all loop models in a round-robin matrix
+python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
 ```
 
 ## Architecture
@@ -65,7 +71,17 @@ The codebase is split into pure game logic and the RL wrapper:
 - `game_env.py` — `PyLinkxEnv(gym.Env)`: wraps `Game` into a Gymnasium environment. Agent plays as P1 only; P2 is controlled internally by a frozen opponent model (`opponent_model_path`) or a drop-first fallback. Observation space is `Dict{"grid": Box(9,9,1), "scalars": Box(34,)}`. Action space is `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop). Reward (P1 perspective): +100 path win, +20 score win, −100/−20 P2 wins, +1.0 per drop + path progress bonus, −0.1 invalid, −0.05 cycle, −0.001 other.
 - `train.py` — Training script using sb3-contrib MaskablePPO with custom `PyLinkxFeaturesExtractor` (CNN for grid + MLP for scalars). Supports `--mode test|train|evaluate` and `--opponent-model` for iterative self-play.
 
-**Key design constraint**: `pytest.ini` sets `pythonpath = src`, so all imports within `src/` use bare module names (e.g., `from game import Game`, not `from src.game import Game`). Tests must follow this same pattern.
+**Pipeline** (`src/pipeline/`):
+- `pipeline.py` — Automated self-play training pipeline. Runs iterative loops, versions models under `src/pipeline/models/loop_N/`, evaluates vs baseline, and selects Easy/Medium/Hard difficulty models. State tracked in `src/pipeline/manifest.json`.
+- `evaluate_matrix.py` — Round-robin evaluation across all loop models. Prints win-rate tables and optionally saves results to JSON.
+- `models/` — Pipeline working directory. Loop model checkpoints live here (`loop_N/best_model.zip`). Not committed alongside game models.
+- `manifest.json` — Tracks training history, per-loop metrics, and the selected difficulty triplet.
+
+**Model directories**:
+- `models/` (project root) — Game-ready models committed to the repo: `base_line_model.zip`, `easy_model.zip`, `medium_model.zip`, `hard_model.zip`.
+- `src/pipeline/models/` — Pipeline working directory. Loop checkpoints produced during training runs.
+
+**Key design constraint**: `pytest.ini` sets `pythonpath = .` (project root), so all imports use the full `src.` prefix (e.g., `from src.game.game import Game`). Intra-package imports within `src/game/` use relative form (e.g., `from .piece import Piece`). Scripts run directly (`main.py`, `train.py`, `pipeline.py`, `evaluate_matrix.py`) insert the project root into `sys.path` at startup so the same import style works when executed as scripts.
 
 ## Win Conditions
 
@@ -102,7 +118,7 @@ All tests should pass. If any fail after a change:
 2. Check whether the test expectation is stale (wrong value, wrong shape, wrong signature) vs. a real regression in game logic.
 3. **Stale test** — update the test to match the current implementation. Common patterns:
    - Observation is `dict` with keys `"grid"` and `"scalars"` — use `obs["grid"].shape`, not `obs.shape`
-   - Imports inside `tests/` must use bare module names (`from game import Game`, not `from src.game import Game`) — mismatched import paths cause `isinstance` to silently return `False`
+   - Imports inside `tests/` must use full `src.` paths: `from src.game.game import Game`, `from src.game.piece import Piece`, `from src.game.player import Player`, `from src.training.game_env import PyLinkxEnv` — mismatched import paths cause `isinstance` to silently return `False`
    - Reward values: ±100/20 for wins/losses, +1.0 per drop, −0.1 invalid, −0.05 cycle, −0.001 other
    - `_calculate_reward(player_idx, action_valid, action, terminated)` requires all 4 arguments; `action` is an `Actions` int, not a string
 4. **Real regression** — fix the source code, then re-run validation.

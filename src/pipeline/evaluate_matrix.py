@@ -7,19 +7,19 @@ Used to validate Easy/Medium/Hard model selection before committing.
 
 Usage:
     # Explicit model list
-    python src/evaluate_matrix.py \
-      --models models/base_line_model.zip models/loop_1/best_model.zip \
-        models/loop_2/best_model.zip \
-        models/loop_3/best_model.zip \
-        models/loop_4/best_model.zip \
+    python src/pipeline/evaluate_matrix.py \
+      --models models/base_line_model.zip src/pipeline/models/loop_1/best_model.zip \
+        src/pipeline/models/loop_2/best_model.zip \
+        src/pipeline/models/loop_3/best_model.zip \
+        src/pipeline/models/loop_4/best_model.zip \
       --labels baseline loop1 loop2 loop3 loop4 \
       --episodes 200
 
     # Pull all loops from manifest
-    python src/evaluate_matrix.py --from-manifest models/manifest.json --episodes 200
+    python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
 
     # Save results to JSON
-    python src/evaluate_matrix.py --from-manifest models/manifest.json --episodes 200 --output models/eval_matrix.json
+    python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200 --output src/pipeline/eval_matrix.json
 """
 
 import argparse
@@ -28,8 +28,8 @@ import os
 import sys
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent))
-from train import evaluate_agent
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.training.train import evaluate_agent
 
 
 def build_matrix(models: list[str], labels: list[str], episodes: int,

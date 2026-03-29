@@ -22,9 +22,9 @@ from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
 # Add parent directory to path for relative imports
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from game_renderer import GameRenderer
+from src.game.game_renderer import GameRenderer
 
 from sb3_contrib import MaskablePPO
 from sb3_contrib.common.wrappers import ActionMasker
@@ -33,7 +33,7 @@ from stable_baselines3.common.env_util import make_vec_env
 from stable_baselines3.common.callbacks import EvalCallback, BaseCallback, CallbackList
 from stable_baselines3.common.vec_env import VecNormalize
 
-from game_env import Actions, PyLinkxEnv
+from src.training.game_env import Actions, PyLinkxEnv
 
 
 class PyLinkxFeaturesExtractor(BaseFeaturesExtractor):

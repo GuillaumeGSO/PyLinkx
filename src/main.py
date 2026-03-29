@@ -1,10 +1,12 @@
 import argparse
 import asyncio
 import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
 import pygame
-from game import Game, Actions
-from game_renderer import GameRenderer
-from game_env import build_observation, compute_action_mask
+from src.game.game import Game, Actions
+from src.game.game_renderer import GameRenderer
+from src.training.game_env import build_observation, compute_action_mask
 
 # Constants
 FPS = 10

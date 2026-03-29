@@ -2,8 +2,8 @@
 
 import numpy as np
 from gymnasium.spaces import Discrete, Dict
-from game_env import PyLinkxEnv
-from game import Game, Actions
+from src.training.game_env import PyLinkxEnv
+from src.game.game import Game, Actions
 
 
 class TestPyLinkxEnvInitialization:

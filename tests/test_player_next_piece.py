@@ -1,5 +1,5 @@
-from src.piece import Piece
-from src.player import Player
+from src.game.piece import Piece
+from src.game.player import Player
 
 
 def test_next_piece_loop_normal():

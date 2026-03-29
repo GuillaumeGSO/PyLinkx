@@ -1,5 +1,5 @@
-from src.game import Game
-from src.player import Player
+from src.game.game import Game
+from src.game.player import Player
 
 
 def test_get_next_player():

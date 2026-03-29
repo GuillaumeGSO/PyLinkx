@@ -1,5 +1,5 @@
-from src.game import Game
-from src.piece import Piece
+from src.game.game import Game
+from src.game.piece import Piece
 
 
 def test_L_shape_floating_left_is_valid():

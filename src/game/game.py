@@ -1,8 +1,8 @@
 # Game logic for PyLinkx
 import random
 from enum import IntEnum
-from player import Player
-from piece import Piece, rotate_shape, flip_shape
+from .player import Player
+from .piece import Piece, rotate_shape, flip_shape
 
 
 class Actions(IntEnum):

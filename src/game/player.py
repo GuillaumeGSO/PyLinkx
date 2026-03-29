@@ -1,5 +1,5 @@
 import random
-from piece import Piece, TETRIS_SHAPES
+from .piece import Piece, TETRIS_SHAPES
 
 
 class Player:

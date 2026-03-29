@@ -6,7 +6,7 @@ Runs iterative training loops, versions each model, evaluates against a fixed
 baseline, and selects Easy/Medium/Hard difficulty models when done.
 
 Usage:
-    python src/pipeline.py \
+    python src/pipeline/pipeline.py \
       --max-loops 10 \
       --timesteps 4000000 \
       --min-timesteps 1000000 \     #Remove this line (or 0) to disable plateau check
@@ -26,10 +26,10 @@ from pathlib import Path
 import numpy as np
 
 # Allow importing train.py from same directory
-sys.path.insert(0, str(Path(__file__).parent))
-from train import evaluate_agent
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+from src.training.train import evaluate_agent
 
-MANIFEST_PATH = "models/manifest.json"
+MANIFEST_PATH = "src/pipeline/manifest.json"
 BASELINE_LOOP = 0
 
 
@@ -154,7 +154,7 @@ def run_training_loop(loop_n: int, model_save_dir: str, opponent_pool: list[str]
                       args: argparse.Namespace):
     """Launch a training subprocess for one loop."""
     cmd = [
-        sys.executable, str(Path(__file__).parent / "train.py"),
+        sys.executable, str(Path(__file__).parent.parent / "training" / "train.py"),
         "--mode", "train",
         "--timesteps", str(args.timesteps),
         "--min-timesteps", str(args.min_timesteps),
@@ -217,7 +217,7 @@ def main():
     for loop_n in range(start_loop, end_loop + 1):
         # Build opponent pool from all registered loops (linear weights: recent favored)
         pool = [e["model_path"] for e in manifest["loops"]]
-        model_save_dir = f"models/loop_{loop_n}"
+        model_save_dir = f"src/pipeline/models/loop_{loop_n}"
         best_model_path = os.path.join(model_save_dir, "best_model.zip")
         fallback_model_path = os.path.join(model_save_dir, "ppo_pylinkx.zip")
 

@@ -15,7 +15,7 @@
     },
     {
       "loop": 1,
-      "model_path": "models/loop_1/best_model.zip",
+      "model_path": "src/pipeline/models/loop_1/best_model.zip",
       "opponent_pool": [
         "models/base_line_model.zip"
       ],
@@ -28,10 +28,10 @@
     },
     {
       "loop": 2,
-      "model_path": "models/loop_2/best_model.zip",
+      "model_path": "src/pipeline/models/loop_2/best_model.zip",
       "opponent_pool": [
         "models/base_line_model.zip",
-        "models/loop_1/best_model.zip"
+        "src/pipeline/models/loop_1/best_model.zip"
       ],
       "timesteps_trained": 2000000,
       "win_rate_vs_prev": 0.77,
@@ -42,11 +42,11 @@
     },
     {
       "loop": 3,
-      "model_path": "models/loop_3/best_model.zip",
+      "model_path": "src/pipeline/models/loop_3/best_model.zip",
       "opponent_pool": [
         "models/base_line_model.zip",
-        "models/loop_1/best_model.zip",
-        "models/loop_2/best_model.zip"
+        "src/pipeline/models/loop_1/best_model.zip",
+        "src/pipeline/models/loop_2/best_model.zip"
       ],
       "timesteps_trained": 2000000,
       "win_rate_vs_prev": 0.7,
@@ -57,12 +57,12 @@
     },
     {
       "loop": 4,
-      "model_path": "models/loop_4/best_model.zip",
+      "model_path": "src/pipeline/models/loop_4/best_model.zip",
       "opponent_pool": [
         "models/base_line_model.zip",
-        "models/loop_1/best_model.zip",
-        "models/loop_2/best_model.zip",
-        "models/loop_3/best_model.zip"
+        "src/pipeline/models/loop_1/best_model.zip",
+        "src/pipeline/models/loop_2/best_model.zip",
+        "src/pipeline/models/loop_3/best_model.zip"
       ],
       "timesteps_trained": 2000000,
       "win_rate_vs_prev": 0.8,
@@ -73,13 +73,13 @@
     },
     {
       "loop": 5,
-      "model_path": "models/loop_5/best_model.zip",
+      "model_path": "src/pipeline/models/loop_5/best_model.zip",
       "opponent_pool": [
         "models/base_line_model.zip",
-        "models/loop_1/best_model.zip",
-        "models/loop_2/best_model.zip",
-        "models/loop_3/best_model.zip",
-        "models/loop_4/best_model.zip"
+        "src/pipeline/models/loop_1/best_model.zip",
+        "src/pipeline/models/loop_2/best_model.zip",
+        "src/pipeline/models/loop_3/best_model.zip",
+        "src/pipeline/models/loop_4/best_model.zip"
       ],
       "timesteps_trained": 4000000,
       "win_rate_vs_prev": 0.8,
@@ -90,14 +90,14 @@
     },
     {
       "loop": 6,
-      "model_path": "models/loop_6/best_model.zip",
+      "model_path": "src/pipeline/models/loop_6/best_model.zip",
       "opponent_pool": [
         "models/base_line_model.zip",
-        "models/loop_1/best_model.zip",
-        "models/loop_2/best_model.zip",
-        "models/loop_3/best_model.zip",
-        "models/loop_4/best_model.zip",
-        "models/loop_5/best_model.zip"
+        "src/pipeline/models/loop_1/best_model.zip",
+        "src/pipeline/models/loop_2/best_model.zip",
+        "src/pipeline/models/loop_3/best_model.zip",
+        "src/pipeline/models/loop_4/best_model.zip",
+        "src/pipeline/models/loop_5/best_model.zip"
       ],
       "timesteps_trained": 4000000,
       "win_rate_vs_prev": 0.95,
@@ -110,17 +110,17 @@
   "difficulty_models": {
     "easy": {
       "loop": 3,
-      "model_path": "models/loop_3/best_model.zip",
+      "model_path": "src/pipeline/models/loop_3/best_model.zip",
       "win_rate_vs_baseline": 0.45
     },
     "medium": {
       "loop": 4,
-      "model_path": "models/loop_4/best_model.zip",
+      "model_path": "src/pipeline/models/loop_4/best_model.zip",
       "win_rate_vs_baseline": 0.65
     },
     "hard": {
       "loop": 5,
-      "model_path": "models/loop_5/best_model.zip",
+      "model_path": "src/pipeline/models/loop_5/best_model.zip",
       "win_rate_vs_baseline": 0.75
     }
   }

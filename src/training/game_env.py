@@ -4,8 +4,8 @@ import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 import pygame
-from game import Game, Actions
-from game_renderer import GameRenderer
+from src.game.game import Game, Actions
+from src.game.game_renderer import GameRenderer
 
 PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
 
