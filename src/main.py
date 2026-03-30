@@ -2,12 +2,22 @@ import argparse
 import asyncio
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+
+# For native execution, add src/ so bare 'game.*' imports resolve.
+# In WASM (pygbag) the virtual filesystem root is already src/.
+if sys.platform != 'emscripten':
+    sys.path.insert(0, str(Path(__file__).parent))
+
 import pygame
-from src.game.game import Game, Actions
-from src.game.game_renderer import GameRenderer
-from src.game.menu_renderer import MenuRenderer
-from src.training.game_env import build_observation, compute_action_mask
+from game.game import Game, Actions
+from game.game_renderer import GameRenderer
+from game.menu_renderer import MenuRenderer
+
+try:
+    from training.game_env import build_observation, compute_action_mask
+except ImportError:
+    build_observation = None
+    compute_action_mask = None
 
 # App states
 MENU = "menu"

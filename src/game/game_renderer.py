@@ -2,16 +2,10 @@ from pathlib import Path
 
 import pygame
 
-from src.game.game import Game
-
+from .game import Game
 from .piece import Piece
 
-_FONT = str(
-    Path(__file__).resolve().parent.parent.parent
-    / "assets"
-    / "fonts"
-    / "PressStart2P-Regular.ttf"
-)
+_FONT = str(Path(__file__).parent.parent / "assets" / "fonts" / "PressStart2P-Regular.ttf")
 
 
 def _draw_gradient(screen, color_top, color_bottom, rect):
