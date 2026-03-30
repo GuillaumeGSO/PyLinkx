@@ -21,6 +21,17 @@ def _draw_gradient(screen, color_top, color_bottom, rect):
         pygame.draw.rect(screen, (r, g, b), (rect.x, rect.y + y, rect.width, 1))
 
 
+def _draw_alpha_gradient_overlay(screen, color, rect):
+    """Draw a vertical overlay fading from alpha=0 (top) to alpha=128 (bottom)"""
+    h = rect.height
+    surf = pygame.Surface((rect.width, h), pygame.SRCALPHA)
+    for y in range(h):
+        alpha = int(128 * y / max(h - 1, 1))
+        r, g, b = color
+        pygame.draw.rect(surf, (r, g, b, alpha), (0, y, rect.width, 1))
+    screen.blit(surf, (rect.x, rect.y))
+
+
 class GameRenderer:
 
     SCREEN_WIDTH = 1000
@@ -90,12 +101,7 @@ class GameRenderer:
     # ------------------------------------------------------------------
 
     def _draw_gradient_background(self):
-        _draw_gradient(
-            self.screen,
-            (15, 0, 30),
-            (0, 0, 0),
-            pygame.Rect(0, 0, self.SCREEN_WIDTH, self.SCREEN_HEIGHT),
-        )
+        self.screen.fill((0, 0, 0))
 
     def _draw_header(self):
         header_rect = pygame.Rect(0, 0, self.SCREEN_WIDTH, self.HEADER_H)
@@ -228,6 +234,7 @@ class GameRenderer:
         )
         self._draw_panel(p1, left_rect, is_p1_active)
         self._draw_panel(p2, right_rect, is_p2_active)
+        
 
     def _draw_panel(self, player, panel_rect, is_active):
         pygame.draw.rect(self.screen, self.PANEL_BG, panel_rect)
@@ -262,6 +269,7 @@ class GameRenderer:
 
         current_piece = self.game.current_piece if is_active else None
         self._draw_piece_miniatures(player, current_piece, panel_rect, x, y)
+        _draw_alpha_gradient_overlay(self.screen, player.color, panel_rect)
 
     def _draw_piece_miniatures(
         self, player, current_piece, panel_rect, start_x, start_y
