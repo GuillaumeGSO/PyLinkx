@@ -6,8 +6,30 @@ import numpy as np
 import pygame
 from src.game.game import Game, Actions
 from src.game.game_renderer import GameRenderer
+from src.game.piece import TETRIS_SHAPES
 
 PIECE_MAP = {"L": 0, "S": 1, "c": 2, "T": 3, "I": 4, "u": 5, "b": 6}
+
+# Pre-computed canonical 4×4 padded shapes for each piece type, flattened (16 values each)
+_CANONICAL_SHAPES: dict[str, np.ndarray] = {}
+for _name in PIECE_MAP:
+    _padded = np.zeros((4, 4), dtype=np.float32)
+    _s = TETRIS_SHAPES[_name]
+    _padded[:len(_s), :len(_s[0])] = _s
+    _CANONICAL_SHAPES[_name] = _padded.flatten()
+
+
+def _build_piece_inventory(player) -> np.ndarray:
+    """Build 7×16=112 inventory for a player. Cell = canonical_shape × (count/2)."""
+    counts: dict[str, int] = {}
+    for p in player.pieces:
+        counts[p.shape_name] = counts.get(p.shape_name, 0) + 1
+    inv = np.zeros(7 * 16, dtype=np.float32)
+    for name, idx in PIECE_MAP.items():
+        count = counts.get(name, 0)
+        if count > 0:
+            inv[idx * 16:(idx + 1) * 16] = _CANONICAL_SHAPES[name] * (count / 2.0)
+    return inv
 
 
 def compute_action_mask(game) -> np.ndarray:
@@ -140,11 +162,16 @@ def build_observation(game, max_steps_by_turn: int, steps_for_current_turn: int,
         h, v = path_progress[i]
         path_scalars.extend([h, v, max(h, v), float(player.score) / grid_cells])
 
+    p1_inventory = _build_piece_inventory(game.players[0])
+    p2_inventory = _build_piece_inventory(game.players[1])
+
     scalars = np.concatenate([
         other_scalars,
         [remaining_actions_ratio],
         shape_vals,
         np.array(path_scalars, dtype=np.float32),
+        p1_inventory,
+        p2_inventory,
     ])
 
     return {"grid": grid_array, "scalars": scalars}
@@ -198,16 +225,18 @@ class PyLinkxEnv(gym.Env):
         # Action space: 6 discrete actions (0-5)
         self.action_space = spaces.Discrete(len(Actions))
 
-        # Observation space: grid (9x9, 1 channel) + 34 scalar features
+        # Observation space: grid (9x9, 1 channel) + 258 scalar features
         # Grid: 9x9 cells with values normalized to [0.0, 0.5, 1.0]
-        # Scalars: player value, piece x, scores, can_drop flag, piece id,
-        #          remaining ratio, game over flag, action validity,
-        #          remaining turn ratio, padded piece shape (4x4=16),
-        #          path progress: p1(h, v, best, area), p2(h, v, best, area)
+        # Scalars [0:34]:  player value, piece x, scores, can_drop flag, piece id,
+        #                  remaining ratio, game over flag, action validity,
+        #                  remaining turn ratio, padded piece shape (4x4=16),
+        #                  path progress: p1(h, v, best, area), p2(h, v, best, area)
+        # Scalars [34:146]: P1 piece inventory — 7 types × 16 cells (canonical shape × count/2)
+        # Scalars [146:258]: P2 piece inventory — same encoding
         self.observation_space = spaces.Dict(
             {
                 "grid": spaces.Box(low=0.0, high=1.0, shape=(9, 9, 1), dtype=np.float32),
-                "scalars": spaces.Box(low=-1.0, high=1.0, shape=(34,), dtype=np.float32),
+                "scalars": spaces.Box(low=-1.0, high=1.0, shape=(258,), dtype=np.float32),
             }
         )
         self._path_progress = [[0.0, 0.0], [0.0, 0.0]]  # [player_idx][h, v] BFS progress
@@ -340,6 +369,9 @@ class PyLinkxEnv(gym.Env):
         p1_progress = scalars[26:30].copy()      # swap P1/P2 path progress
         scalars[26:30] = scalars[30:34]
         scalars[30:34] = p1_progress
+        p1_inv = scalars[34:146].copy()          # swap P1/P2 piece inventories
+        scalars[34:146] = scalars[146:258]
+        scalars[146:258] = p1_inv
 
         return {"grid": grid, "scalars": scalars}
 

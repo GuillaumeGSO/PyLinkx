@@ -28,7 +28,7 @@ class TestPyLinkxEnvInitialization:
         assert isinstance(env.observation_space, Dict)
         assert env.observation_space["grid"].shape == (9, 9, 1)
         assert env.observation_space["grid"].dtype == np.float32
-        assert env.observation_space["scalars"].shape == (34,)
+        assert env.observation_space["scalars"].shape == (258,)
         assert env.observation_space["scalars"].dtype == np.float32
 
 
@@ -51,7 +51,7 @@ class TestPyLinkxEnvReset:
         obs, info = env.reset()
 
         assert obs["grid"].shape == (9, 9, 1)
-        assert obs["scalars"].shape == (34,)
+        assert obs["scalars"].shape == (258,)
 
     def test_reset_clears_step_count(self):
         """Test that reset clears the step counter."""
@@ -102,7 +102,7 @@ class TestPyLinkxEnvStep:
 
         obs, _, _, _, _ = env.step(0)
         assert obs["grid"].shape == (9, 9, 1)
-        assert obs["scalars"].shape == (34,)
+        assert obs["scalars"].shape == (258,)
 
     def test_step_increments_step_count(self):
         """Test that step increments the step counter."""
@@ -376,3 +376,69 @@ class TestPyLinkxEnvRendering:
 
         # Should not raise an error
         env.render()
+
+
+class TestFlipObservationPerspective:
+    """Test that _flip_observation_perspective correctly swaps P1/P2 fields."""
+
+    def _get_obs(self):
+        env = PyLinkxEnv()
+        env.reset()
+        return env, env._get_observation()
+
+    def test_scalars_shape(self):
+        """Observation scalars should have 258 elements."""
+        _, obs = self._get_obs()
+        assert obs["scalars"].shape == (258,)
+
+    def test_grid_swap(self):
+        """P1 cells (0.5) and P2 cells (1.0) should be exchanged; empty (0.0) unchanged."""
+        env, obs = self._get_obs()
+        # Place known cells manually
+        env.game.grid[0][0] = 1  # P1
+        env.game.grid[0][1] = 2  # P2
+        obs = env._get_observation()
+        flipped = env._flip_observation_perspective(obs)
+
+        # P1 cell becomes P2
+        assert flipped["grid"][0, 0, 0] == 1.0
+        # P2 cell becomes P1
+        assert flipped["grid"][0, 1, 0] == 0.5
+        # Empty cells stay 0.0
+        assert (flipped["grid"][obs["grid"] == 0.0] == 0.0).all()
+
+    def test_player_indicator_set_to_p1(self):
+        """After flip, scalars[0] must be 0.0 (P1 perspective)."""
+        env, obs = self._get_obs()
+        flipped = env._flip_observation_perspective(obs)
+        assert flipped["scalars"][0] == 0.0
+
+    def test_score_swap(self):
+        """scalars[2] and scalars[6] (P1/P2 area scores) are exchanged."""
+        env, obs = self._get_obs()
+        flipped = env._flip_observation_perspective(obs)
+        assert flipped["scalars"][2] == obs["scalars"][6]
+        assert flipped["scalars"][6] == obs["scalars"][2]
+
+    def test_path_progress_swap(self):
+        """scalars[26:30] and scalars[30:34] (P1/P2 path progress) are exchanged."""
+        env, obs = self._get_obs()
+        flipped = env._flip_observation_perspective(obs)
+        np.testing.assert_array_equal(flipped["scalars"][26:30], obs["scalars"][30:34])
+        np.testing.assert_array_equal(flipped["scalars"][30:34], obs["scalars"][26:30])
+
+    def test_inventory_swap(self):
+        """scalars[34:146] and scalars[146:258] (P1/P2 inventories) are exchanged."""
+        env, obs = self._get_obs()
+        flipped = env._flip_observation_perspective(obs)
+        np.testing.assert_array_equal(flipped["scalars"][34:146], obs["scalars"][146:258])
+        np.testing.assert_array_equal(flipped["scalars"][146:258], obs["scalars"][34:146])
+
+    def test_double_flip_identity(self):
+        """Flipping an observation twice returns the original (when P1 is current player)."""
+        env, obs = self._get_obs()
+        double_flipped = env._flip_observation_perspective(
+            env._flip_observation_perspective(obs)
+        )
+        np.testing.assert_array_almost_equal(double_flipped["grid"], obs["grid"])
+        np.testing.assert_array_almost_equal(double_flipped["scalars"], obs["scalars"])

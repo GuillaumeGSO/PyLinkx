@@ -38,7 +38,7 @@ from src.training.game_env import Actions, PyLinkxEnv
 class PyLinkxFeaturesExtractor(BaseFeaturesExtractor):
     """Custom feature extractor: CNN for 9x9 grid + MLP for scalars."""
 
-    def __init__(self, observation_space, features_dim=192):
+    def __init__(self, observation_space, features_dim=256):
         super().__init__(observation_space, features_dim)
 
         self.grid_cnn = nn.Sequential(
@@ -57,7 +57,7 @@ class PyLinkxFeaturesExtractor(BaseFeaturesExtractor):
 
         scalar_dim = observation_space.spaces["scalars"].shape[0]
         self.scalar_net = nn.Sequential(
-            nn.Linear(scalar_dim, 64),
+            nn.Linear(scalar_dim, 128),
             nn.ReLU(),
         )
 
@@ -275,7 +275,7 @@ def train_agent(
     print("2. Creating MaskablePPO agent...")
     policy_kwargs = {
         "features_extractor_class": PyLinkxFeaturesExtractor,
-        "features_extractor_kwargs": {"features_dim": 192},
+        "features_extractor_kwargs": {"features_dim": 256},
         "normalize_images": False,
     }
     model = MaskablePPO(

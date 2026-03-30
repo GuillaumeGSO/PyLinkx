@@ -39,16 +39,16 @@ python src/main.py
 
 ```bash
 # Verify environment works
-python src/train.py --mode test
+python src/training/train.py --mode test
 
 # Train against drop-first fallback P2 (first loop)
-python src/train.py --mode train --timesteps 4000000
+python src/training/train.py --mode train --timesteps 4000000
 
 # Train against a frozen opponent model (iterative self-play)
-python src/train.py --mode train --timesteps 4000000 --opponent-model models/best_model.zip
+python src/training/train.py --mode train --timesteps 4000000 --opponent-model models/best_model.zip
 
 # Evaluate a trained model
-python src/train.py --mode evaluate --model models/best_model.zip --eval-episodes 200 --render
+python src/training/train.py --mode evaluate --model models/best_model.zip --eval-episodes 200 --render
 ```
 
 **Training options:**
@@ -103,18 +103,25 @@ Opens a local server at `http://localhost:8000` — verify the game works in bro
 ```
 .
 ├── src/
-│   ├── main.py              # Interactive game entry point
-│   ├── game.py              # Core game logic and RL interface
-│   ├── player.py            # Player state and piece queue
-│   ├── piece.py             # Tetris piece definitions (7 shapes)
-│   ├── game_renderer.py     # Pygame rendering
-│   ├── game_env.py          # Gymnasium environment wrapper
-│   └── train.py             # PPO training, evaluation, and test scripts
+│   ├── main.py                      # Interactive game entry point
+│   ├── game/
+│   │   ├── game.py                  # Core game logic and RL interface
+│   │   ├── player.py                # Player state and piece queue
+│   │   ├── piece.py                 # Tetris piece definitions (7 shapes)
+│   │   ├── game_renderer.py         # Pygame rendering
+│   │   └── menu_renderer.py         # Menu rendering
+│   ├── training/
+│   │   ├── game_env.py              # Gymnasium environment wrapper
+│   │   └── train.py                 # PPO training, evaluation, and test scripts
+│   └── pipeline/
+│       ├── pipeline.py              # Automated self-play training pipeline
+│       ├── evaluate_matrix.py       # Round-robin model evaluation
+│       └── manifest.json            # Training history and model registry
 ├── tests/
-│   ├── test_game_*.py       # Game logic tests
-│   ├── test_player_*.py     # Player scoring tests
-│   └── test_rl_env.py       # Gymnasium environment tests
-├── models/                  # Saved model checkpoints
+│   ├── test_game_*.py               # Game logic tests
+│   ├── test_player_*.py             # Player scoring tests
+│   └── test_rl_env.py               # Gymnasium environment tests
+├── models/                          # Game-ready model checkpoints
 ├── requirements.txt
 └── README.md
 ```
@@ -139,7 +146,13 @@ Opens a local server at `http://localhost:8000` — verify the game works in bro
 `Dict` with two components:
 
 - **`grid`**: `Box(9, 9, 1)` — game grid normalized to `[0.0, 0.5, 1.0]` (empty / player 1 / player 2)
-- **`scalars`**: `Box(34,)` — 34 normalized scalar features including piece position, scores, path progress, piece shape, and game state
+- **`scalars`**: `Box(258,)` — 258 normalized scalar features:
+
+| Range | Content |
+|-------|---------|
+| `[0:34]` | Player indicator, piece position, scores, can-drop flag, piece ID, remaining ratio, game-over flag, action validity, turn time left, current piece shape (4×4=16 values), path progress for both players |
+| `[34:146]` | P1 piece inventory — 7 piece types × 16 cells; each cell = canonical shape bit × (count/2), so 0 = absent, 0.5 = 1 copy left, 1.0 = 2 copies left |
+| `[146:258]` | P2 piece inventory — same encoding |
 
 ### Reward Structure
 
@@ -161,7 +174,7 @@ Agent plays as P1 only. P2 is controlled internally by a frozen opponent model o
 | Hyperparameter | Value |
 |---------------|-------|
 | Policy | MultiInputPolicy |
-| Features extractor | Custom CNN (2×Conv2d) + MLP for scalars |
+| Features extractor | Custom CNN (3×Conv2d → 128-dim) + MLP (258→128-dim) |
 | Learning rate | 3e-4 (constant) |
 | n_steps | 4096 |
 | batch_size | 256 |
