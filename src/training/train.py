@@ -10,7 +10,6 @@ This script demonstrates how to:
 """
 
 import os
-import random
 import subprocess
 import numpy as np
 import sys

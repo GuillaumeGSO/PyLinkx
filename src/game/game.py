@@ -29,6 +29,8 @@ class Game:
     def reset(self):
         # Reset the game state
         self.grid = [[0 for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)]
+        self.piece_id_grid = [[0 for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)]
+        self._piece_counter = 0
         self.status = Game.PLAYING
         self.players = [
             Player("Player 1", 1, (255, 215, 0)),  # Yellow
@@ -268,10 +270,12 @@ class Game:
         return False
 
     def place_piece_on_grid(self, piece, grid_x, grid_y, player: Player):
+        self._piece_counter += 1
         for row_idx, row in enumerate(piece.shape):
             for col_idx, value in enumerate(row):
                 if value == 1:
                     self.grid[grid_y + row_idx][grid_x + col_idx] = player.value
+                    self.piece_id_grid[grid_y + row_idx][grid_x + col_idx] = self._piece_counter
 
     def execute_action(self, action: int) -> bool:
         """

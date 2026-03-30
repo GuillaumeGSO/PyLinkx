@@ -8,7 +8,7 @@ class Player:
         self.value = value
         self.score = 0
         self.color = color
-        self.piece_index = 0
+        self.piece_index = -1
         self.has_given_up = False
         self.pieces = [Piece(shape, self) for shape in TETRIS_SHAPES]
         self.pieces.extend([Piece(shape, self) for shape in TETRIS_SHAPES])
@@ -72,6 +72,75 @@ class Player:
                             stack.append((nr, nc))
 
         return False
+
+    def get_winning_path_cells(self, grid) -> set:
+        """Return the set of (row, col) cells forming the winning connected group, or empty set."""
+        rows = len(grid)
+        cols = len(grid[0])
+
+        # Try horizontal win: BFS from each left-edge cell independently
+        for start_r in range(rows):
+            if grid[start_r][0] != self.value:
+                continue
+            stack = [(start_r, 0)]
+            visited = {(start_r, 0)}
+            while stack:
+                r, c = stack.pop()
+                if c == cols - 1:
+                    return visited
+                for dr in [-1, 0, 1]:
+                    for dc in [-1, 0, 1]:
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited:
+                            if grid[nr][nc] == self.value:
+                                visited.add((nr, nc))
+                                stack.append((nr, nc))
+
+        # Try vertical win: BFS from each top-edge cell independently
+        for start_c in range(cols):
+            if grid[0][start_c] != self.value:
+                continue
+            stack = [(0, start_c)]
+            visited = {(0, start_c)}
+            while stack:
+                r, c = stack.pop()
+                if r == rows - 1:
+                    return visited
+                for dr in [-1, 0, 1]:
+                    for dc in [-1, 0, 1]:
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < rows and 0 <= nc < cols and (nr, nc) not in visited:
+                            if grid[nr][nc] == self.value:
+                                visited.add((nr, nc))
+                                stack.append((nr, nc))
+
+        return set()
+
+    def get_largest_zone_cells(self, grid) -> set:
+        """Return the set of (row, col) cells forming the largest contiguous zone."""
+        rows, cols = len(grid), len(grid[0])
+        temp_grid = [row[:] for row in grid]
+        best_cells: set = set()
+
+        for r in range(rows):
+            for c in range(cols):
+                if temp_grid[r][c] == self.value:
+                    current_cells: set = set()
+                    stack = [(r, c)]
+                    temp_grid[r][c] = 0
+                    while stack:
+                        curr_r, curr_c = stack.pop()
+                        current_cells.add((curr_r, curr_c))
+                        for dr in [-1, 0, 1]:
+                            for dc in [-1, 0, 1]:
+                                nr, nc = curr_r + dr, curr_c + dc
+                                if 0 <= nr < rows and 0 <= nc < cols and temp_grid[nr][nc] == self.value:
+                                    temp_grid[nr][nc] = 0
+                                    stack.append((nr, nc))
+                    if len(current_cells) > len(best_cells):
+                        best_cells = current_cells
+
+        return best_cells
 
     def calculate_score(self, grid):
         rows, cols = len(grid), len(grid[0])
