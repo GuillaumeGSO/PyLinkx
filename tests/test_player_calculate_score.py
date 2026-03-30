@@ -1,4 +1,4 @@
-from src.player import Player
+from src.game.player import Player
 
 
 def test_calculate_score_one_area_aligned():

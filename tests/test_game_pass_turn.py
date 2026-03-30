@@ -1,6 +1,6 @@
 """Tests for auto-pass + one extra turn rule."""
-from src.game import Game
-from src.piece import Piece
+from src.game.game import Game
+from src.game.piece import Piece
 
 
 def _fill_grid(game, leave_open=None):

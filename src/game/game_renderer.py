@@ -1,7 +1,7 @@
 import pygame
 
-from game import Game
-from piece import Piece
+from src.game.game import Game
+from .piece import Piece
 
 
 class GameRenderer:
