@@ -52,6 +52,9 @@ python src/training/train.py --mode evaluate --model models/ppo_pylinkx.zip --ev
 # Run the self-play training pipeline
 python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip
 
+# Run pipeline with custom pool pruning (keep baseline + last 3 RL loops, default)
+python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip --pool-lookback 3
+
 # Evaluate all loop models in a round-robin matrix
 python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
 ```
@@ -72,7 +75,7 @@ The codebase is split into pure game logic and the RL wrapper:
 - `train.py` — Training script using sb3-contrib MaskablePPO with custom `PyLinkxFeaturesExtractor` (CNN 3×Conv2d→128-dim for grid + MLP 258→128-dim for scalars, total features_dim=256). Supports `--mode test|train|evaluate` and `--opponent-model` for iterative self-play.
 
 **Pipeline** (`src/pipeline/`):
-- `pipeline.py` — Automated self-play training pipeline. Runs iterative loops, versions models under `src/pipeline/models/loop_N/`, evaluates vs baseline, and selects Easy/Medium/Hard difficulty models. State tracked in `src/pipeline/manifest.json`.
+- `pipeline.py` — Automated self-play training pipeline. Runs iterative loops, versions models under `src/pipeline/models/loop_N/`, evaluates vs baseline, and selects Easy/Medium/Hard difficulty models. State tracked in `src/pipeline/manifest.json`. Opponent pool is pruned to baseline + last `--pool-lookback` (default 3) RL loops, with linear sampling weights so recent opponents are favoured.
 - `evaluate_matrix.py` — Round-robin evaluation across all loop models. Prints win-rate tables and optionally saves results to JSON.
 - `models/` — Pipeline working directory. Loop model checkpoints live here (`loop_N/best_model.zip`). Not committed alongside game models.
 - `manifest.json` — Tracks training history, per-loop metrics, and the selected difficulty triplet.

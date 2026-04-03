@@ -5,7 +5,7 @@
       "loop": 0,
       "model_path": "models/base_line_model.zip",
       "opponent": "legacy",
-      "timesteps_trained": 6000000,
+      "timesteps_trained": 3000000,
       "win_rate_vs_prev": null,
       "win_rate_vs_baseline": null,
       "path_win_rate_vs_baseline": null,
@@ -19,12 +19,12 @@
       "opponent_pool": [
         "models/base_line_model.zip"
       ],
-      "timesteps_trained": 2000000,
-      "win_rate_vs_prev": 0.75,
-      "win_rate_vs_baseline": 0.78,
-      "path_win_rate_vs_baseline": 0.19,
-      "score_win_rate_vs_baseline": 0.59,
-      "mean_reward_vs_baseline": 33.36323999999999
+      "timesteps_trained": 4000000,
+      "win_rate_vs_prev": 0.7,
+      "win_rate_vs_baseline": 0.8,
+      "path_win_rate_vs_baseline": 0.08,
+      "score_win_rate_vs_baseline": 0.72,
+      "mean_reward_vs_baseline": 22.37185999999999
     },
     {
       "loop": 2,
@@ -33,12 +33,12 @@
         "models/base_line_model.zip",
         "src/pipeline/models/loop_1/best_model.zip"
       ],
-      "timesteps_trained": 2000000,
-      "win_rate_vs_prev": 0.77,
-      "win_rate_vs_baseline": 0.79,
-      "path_win_rate_vs_baseline": 0.21,
-      "score_win_rate_vs_baseline": 0.58,
-      "mean_reward_vs_baseline": 34.03391
+      "timesteps_trained": 4000000,
+      "win_rate_vs_prev": 0.81,
+      "win_rate_vs_baseline": 0.64,
+      "path_win_rate_vs_baseline": 0.08,
+      "score_win_rate_vs_baseline": 0.56,
+      "mean_reward_vs_baseline": 16.781249999999996
     },
     {
       "loop": 3,
@@ -48,12 +48,12 @@
         "src/pipeline/models/loop_1/best_model.zip",
         "src/pipeline/models/loop_2/best_model.zip"
       ],
-      "timesteps_trained": 2000000,
+      "timesteps_trained": 4000000,
       "win_rate_vs_prev": 0.7,
-      "win_rate_vs_baseline": 0.45,
-      "path_win_rate_vs_baseline": 0.05,
-      "score_win_rate_vs_baseline": 0.4,
-      "mean_reward_vs_baseline": 5.023199999999992
+      "win_rate_vs_baseline": 0.86,
+      "path_win_rate_vs_baseline": 0.19,
+      "score_win_rate_vs_baseline": 0.67,
+      "mean_reward_vs_baseline": 35.561249999999994
     },
     {
       "loop": 4,
@@ -64,12 +64,12 @@
         "src/pipeline/models/loop_2/best_model.zip",
         "src/pipeline/models/loop_3/best_model.zip"
       ],
-      "timesteps_trained": 2000000,
-      "win_rate_vs_prev": 0.8,
-      "win_rate_vs_baseline": 0.65,
-      "path_win_rate_vs_baseline": 0.25,
-      "score_win_rate_vs_baseline": 0.4,
-      "mean_reward_vs_baseline": 27.3718
+      "timesteps_trained": 4000000,
+      "win_rate_vs_prev": 0.79,
+      "win_rate_vs_baseline": 0.77,
+      "path_win_rate_vs_baseline": 0.23,
+      "score_win_rate_vs_baseline": 0.54,
+      "mean_reward_vs_baseline": 35.34149999999999
     },
     {
       "loop": 5,
@@ -82,11 +82,11 @@
         "src/pipeline/models/loop_4/best_model.zip"
       ],
       "timesteps_trained": 4000000,
-      "win_rate_vs_prev": 0.8,
-      "win_rate_vs_baseline": 0.75,
-      "path_win_rate_vs_baseline": 0.35,
-      "score_win_rate_vs_baseline": 0.4,
-      "mean_reward_vs_baseline": 39.41305
+      "win_rate_vs_prev": 0.74,
+      "win_rate_vs_baseline": 0.8,
+      "path_win_rate_vs_baseline": 0.15,
+      "score_win_rate_vs_baseline": 0.65,
+      "mean_reward_vs_baseline": 32.92476
     },
     {
       "loop": 6,
@@ -100,28 +100,201 @@
         "src/pipeline/models/loop_5/best_model.zip"
       ],
       "timesteps_trained": 4000000,
-      "win_rate_vs_prev": 0.95,
-      "win_rate_vs_baseline": 0.7,
-      "path_win_rate_vs_baseline": 0.15,
-      "score_win_rate_vs_baseline": 0.55,
-      "mean_reward_vs_baseline": 19.939299999999996
+      "win_rate_vs_prev": 0.83,
+      "win_rate_vs_baseline": 0.78,
+      "path_win_rate_vs_baseline": 0.12,
+      "score_win_rate_vs_baseline": 0.66,
+      "mean_reward_vs_baseline": 23.587539999999994
+    },
+    {
+      "loop": 7,
+      "model_path": "src/pipeline/models/loop_7/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_1/best_model.zip",
+        "src/pipeline/models/loop_2/best_model.zip",
+        "src/pipeline/models/loop_3/best_model.zip",
+        "src/pipeline/models/loop_4/best_model.zip",
+        "src/pipeline/models/loop_5/best_model.zip",
+        "src/pipeline/models/loop_6/best_model.zip"
+      ],
+      "timesteps_trained": 4000000,
+      "win_rate_vs_prev": 0.76,
+      "win_rate_vs_baseline": 0.71,
+      "path_win_rate_vs_baseline": 0.12,
+      "score_win_rate_vs_baseline": 0.59,
+      "mean_reward_vs_baseline": 23.47199
+    },
+    {
+      "loop": 8,
+      "model_path": "src/pipeline/models/loop_8/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_5/best_model.zip",
+        "src/pipeline/models/loop_6/best_model.zip",
+        "src/pipeline/models/loop_7/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.7,
+      "win_rate_vs_baseline": 0.79,
+      "path_win_rate_vs_baseline": 0.16,
+      "score_win_rate_vs_baseline": 0.63,
+      "mean_reward_vs_baseline": 29.56438999999999
+    },
+    {
+      "loop": 9,
+      "model_path": "src/pipeline/models/loop_9/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_6/best_model.zip",
+        "src/pipeline/models/loop_7/best_model.zip",
+        "src/pipeline/models/loop_8/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.82,
+      "win_rate_vs_baseline": 0.84,
+      "path_win_rate_vs_baseline": 0.14,
+      "score_win_rate_vs_baseline": 0.7,
+      "mean_reward_vs_baseline": 29.747469999999993
+    },
+    {
+      "loop": 10,
+      "model_path": "src/pipeline/models/loop_10/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_7/best_model.zip",
+        "src/pipeline/models/loop_8/best_model.zip",
+        "src/pipeline/models/loop_9/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.74,
+      "win_rate_vs_baseline": 0.87,
+      "path_win_rate_vs_baseline": 0.16,
+      "score_win_rate_vs_baseline": 0.71,
+      "mean_reward_vs_baseline": 37.67350999999999
+    },
+    {
+      "loop": 11,
+      "model_path": "src/pipeline/models/loop_11/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_8/best_model.zip",
+        "src/pipeline/models/loop_9/best_model.zip",
+        "src/pipeline/models/loop_10/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.7,
+      "win_rate_vs_baseline": 0.72,
+      "path_win_rate_vs_baseline": 0.12,
+      "score_win_rate_vs_baseline": 0.6,
+      "mean_reward_vs_baseline": 19.484610000000004
+    },
+    {
+      "loop": 12,
+      "model_path": "src/pipeline/models/loop_12/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_9/best_model.zip",
+        "src/pipeline/models/loop_10/best_model.zip",
+        "src/pipeline/models/loop_11/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.81,
+      "win_rate_vs_baseline": 0.84,
+      "path_win_rate_vs_baseline": 0.19,
+      "score_win_rate_vs_baseline": 0.65,
+      "mean_reward_vs_baseline": 30.67311
+    },
+    {
+      "loop": 13,
+      "model_path": "src/pipeline/models/loop_13/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_10/best_model.zip",
+        "src/pipeline/models/loop_11/best_model.zip",
+        "src/pipeline/models/loop_12/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.81,
+      "win_rate_vs_baseline": 0.81,
+      "path_win_rate_vs_baseline": 0.16,
+      "score_win_rate_vs_baseline": 0.65,
+      "mean_reward_vs_baseline": 27.628579999999992
+    },
+    {
+      "loop": 14,
+      "model_path": "src/pipeline/models/loop_14/best_model.zip",
+      "opponent_pool": [
+        "models/base_line_model.zip",
+        "src/pipeline/models/loop_11/best_model.zip",
+        "src/pipeline/models/loop_12/best_model.zip",
+        "src/pipeline/models/loop_13/best_model.zip"
+      ],
+      "opponent_weights": [
+        1.0,
+        1.0,
+        2.0,
+        3.0
+      ],
+      "timesteps_trained": 6000000,
+      "win_rate_vs_prev": 0.72,
+      "win_rate_vs_baseline": 0.84,
+      "path_win_rate_vs_baseline": 0.44,
+      "score_win_rate_vs_baseline": 0.4,
+      "mean_reward_vs_baseline": 52.37285000000001
     }
   ],
   "difficulty_models": {
     "easy": {
-      "loop": 3,
-      "model_path": "src/pipeline/models/loop_3/best_model.zip",
-      "win_rate_vs_baseline": 0.45
+      "loop": 2,
+      "model_path": "src/pipeline/models/loop_2/best_model.zip",
+      "win_rate_vs_baseline": 0.64
     },
     "medium": {
-      "loop": 4,
-      "model_path": "src/pipeline/models/loop_4/best_model.zip",
-      "win_rate_vs_baseline": 0.65
+      "loop": 6,
+      "model_path": "src/pipeline/models/loop_6/best_model.zip",
+      "win_rate_vs_baseline": 0.78
     },
     "hard": {
-      "loop": 5,
-      "model_path": "src/pipeline/models/loop_5/best_model.zip",
-      "win_rate_vs_baseline": 0.75
+      "loop": 14,
+      "model_path": "src/pipeline/models/loop_14/best_model.zip",
+      "win_rate_vs_baseline": 0.84
     }
   }
 }

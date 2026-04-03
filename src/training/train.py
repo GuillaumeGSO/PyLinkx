@@ -76,11 +76,13 @@ def linear_schedule(initial_value: float):
 
 
 class RenderOnBestCallback(BaseCallback):
-    def __init__(self, max_steps: int, max_steps_by_turn: int, opponent_model_path: str | None = None):
+    def __init__(self, max_steps: int, max_steps_by_turn: int, opponent_model_path: str | None = None,
+                 best_model_path: str = "models/best_model.zip"):
         super().__init__(verbose=0)
         self._max_steps = max_steps
         self._max_steps_by_turn = max_steps_by_turn
         self._opponent_model_path = opponent_model_path
+        self._best_model_path = best_model_path
         self._render_proc: subprocess.Popen | None = None
 
     def _on_step(self) -> bool:
@@ -89,7 +91,7 @@ class RenderOnBestCallback(BaseCallback):
         cmd = [
             sys.executable, __file__,
             "--mode", "evaluate",
-            "--model", "models/best_model.zip",
+            "--model", self._best_model_path,
             "--eval-episodes", "1",
             "--render",
             "--maxsteps", str(self._max_steps),
@@ -191,11 +193,13 @@ def train_agent(
     render: bool = False,
     opponent_model_path: str | None = None,
     opponent_model_paths: list[str] | None = None,
+    opponent_weights: list[float] | None = None,
     game_eval_freq: int = 20_000,
     baseline_model_path: str | None = None,
     min_timesteps: int = 0,
     plateau_window: int = 5,
     plateau_threshold: float = 0.02,
+    tb_log_name: str = "PPO",
 ):
     """
     Train a PPO agent on the PyLinkx environment.
@@ -226,7 +230,8 @@ def train_agent(
     print("\n1. Creating environment...")
     n_envs = envs  # Number of parallel environments
     if opponent_model_paths:
-        opponent_desc = f"pool of {len(opponent_model_paths)} models (linear weights)"
+        weights_desc = "custom" if opponent_weights else "linear"
+        opponent_desc = f"pool of {len(opponent_model_paths)} models ({weights_desc} weights)"
     else:
         opponent_desc = opponent_model_path or "drop-first fallback"
     print(f"Using {n_envs} parallel environments (CPU cores: {os.cpu_count()})")
@@ -237,7 +242,8 @@ def train_agent(
 
     if opponent_model_paths:
         env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn,
-                      "opponent_model_paths": opponent_model_paths}
+                      "opponent_model_paths": opponent_model_paths,
+                      "opponent_weights": opponent_weights}
     else:
         env_kwargs = {"max_steps": max_steps, "max_steps_by_turn": max_steps_by_turn,
                       "opponent_model_path": opponent_model_path}
@@ -246,23 +252,30 @@ def train_agent(
 
     # Create evaluation environment (must be wrapped the same way for EvalCallback)
     eval_env = make_vec_env(make_masked_env, n_envs=1, env_kwargs=env_kwargs, wrapper_class=Monitor)
-    eval_env = VecNormalize(eval_env, norm_reward=True, norm_obs=False, training=False)
+    eval_env = VecNormalize(eval_env, norm_reward=False, norm_obs=False, training=False)
+
+    # eval_freq is in rollout steps (n_calls), not total timesteps.
+    # Divide by n_envs so callbacks fire at the intended total-timestep frequency.
+    eval_freq_steps = max(1, game_eval_freq // n_envs)
 
     # Setup evaluation callback
-    render_callback = RenderOnBestCallback(max_steps, max_steps_by_turn, opponent_model_path) if render else None
+    render_callback = RenderOnBestCallback(
+        max_steps, max_steps_by_turn, opponent_model_path,
+        best_model_path=os.path.join(best_model_save_path, "best_model.zip"),
+    ) if render else None
     eval_callback = EvalCallback(
         eval_env,
         callback_on_new_best=render_callback,
         best_model_save_path=best_model_save_path,
         log_path="./logs/",
-        eval_freq=game_eval_freq,
+        eval_freq=eval_freq_steps,
         n_eval_episodes=eval_episodes,
         deterministic=True,
     )
 
     game_metrics_callback = GameMetricsCallback(
         eval_env_kwargs=env_kwargs,
-        eval_freq=game_eval_freq,
+        eval_freq=eval_freq_steps,
         baseline_model_path=baseline_model_path,
         min_timesteps=min_timesteps,
         plateau_window=plateau_window,
@@ -305,6 +318,7 @@ def train_agent(
             total_timesteps=total_timesteps,
             callback=callbacks,
             progress_bar=True,
+            tb_log_name=tb_log_name,
         )
     except KeyboardInterrupt:
         print("\n\nTraining interrupted by user.")
@@ -537,13 +551,20 @@ if __name__ == "__main__":
         "--opponent-models",
         nargs="+",
         default=None,
-        help="Paths to a pool of opponent models (sampled with linear weights, used by pipeline)",
+        help="Paths to a pool of opponent models (sampled with weights, used by pipeline)",
+    )
+    parser.add_argument(
+        "--opponent-weights",
+        nargs="+",
+        type=float,
+        default=None,
+        help="Sampling weights for --opponent-models (must match count; default: linear 1,2,…,N)",
     )
     parser.add_argument(
         "--game-eval-freq",
         type=int,
-        default=10000,
-        help="How often (in timesteps) to log game metrics to TensorBoard (default: 10000)",
+        default=60000,
+        help="How often (in timesteps) to log game metrics to TensorBoard (default: 60000)",
     )
     parser.add_argument(
         "--baseline-model",
@@ -568,8 +589,32 @@ if __name__ == "__main__":
         default=0.02,
         help="Max win rate range within window to declare plateau (default: 0.02)",
     )
+    parser.add_argument(
+        "--tb-log-name",
+        default="PPO",
+        help="TensorBoard run name (subfolder under ./logs, default: PPO)",
+    )
 
     args = parser.parse_args()
+
+    if args.mode == "train":
+        print(f"\n{'='*60}")
+        print(f"Training Parameters")
+        print(f"{'='*60}")
+        print(f"  timesteps:             {args.timesteps:,}")
+        print(f"  min-timesteps:         {args.min_timesteps:,}")
+        print(f"  envs:                  {args.envs}")
+        print(f"  maxsteps:              {args.maxsteps}")
+        print(f"  maxstepsbyturn:        {args.maxstepsbyturn}")
+        print(f"  game-eval-freq:        {args.game_eval_freq:,}")
+        print(f"  baseline-model:        {args.baseline_model}")
+        print(f"  opponent-model:        {args.opponent_model}")
+        print(f"  opponent-models:       {args.opponent_models}")
+        print(f"  opponent-weights:      {args.opponent_weights}")
+        print(f"  model-save-dir:        {args.model_save_dir}")
+        print(f"  plateau-window:        {args.plateau_window}")
+        print(f"  plateau-threshold:     {args.plateau_threshold}")
+        print(f"{'='*60}")
 
     if args.mode == "test":
         quick_test()
@@ -584,11 +629,13 @@ if __name__ == "__main__":
             render=args.render,
             opponent_model_path=args.opponent_model,
             opponent_model_paths=args.opponent_models,
+            opponent_weights=args.opponent_weights,
             game_eval_freq=args.game_eval_freq,
             baseline_model_path=args.baseline_model,
             min_timesteps=args.min_timesteps,
             plateau_window=args.plateau_window,
             plateau_threshold=args.plateau_threshold,
+            tb_log_name=args.tb_log_name,
         )
         print("\n✓ Training completed successfully!")
     elif args.mode == "evaluate":

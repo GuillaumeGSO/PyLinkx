@@ -7,6 +7,7 @@ from pathlib import Path
 # In WASM (pygbag) the virtual filesystem root is already src/.
 if sys.platform != 'emscripten':
     sys.path.insert(0, str(Path(__file__).parent))
+    sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pygame
 from game.game import Game, Actions
@@ -16,8 +17,11 @@ from game.menu_renderer import MenuRenderer
 try:
     from training.game_env import build_observation, compute_action_mask
 except ImportError:
-    build_observation = None
-    compute_action_mask = None
+    try:
+        from src.training.game_env import build_observation, compute_action_mask
+    except ImportError:
+        build_observation = None
+        compute_action_mask = None
 
 # App states
 MENU = "menu"

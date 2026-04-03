@@ -2,7 +2,7 @@
 
 PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasium RL environment for training reinforcement learning agents. Players place tetris-like pieces and win by connecting opposite borders (path win) or holding the largest contiguous area when all pieces are used (score win).
 
-![Screenshot](docs/Screenshot.png)
+![Screenshot](assests/Screenshot_V0.png)
 
 
 ## Setup
@@ -60,7 +60,7 @@ python src/training/train.py --mode evaluate --model models/best_model.zip --eva
 - `--opponent-model`: Path to opponent model for P2 (default: drop-first fallback)
 - `--eval-episodes`: Number of evaluation episodes (default: 100)
 - `--render`: Show game visualization during evaluation
-- `--game-eval-freq`: How often (in timesteps) to log game metrics to TensorBoard (default: 10000)
+- `--game-eval-freq`: How often (in timesteps) to log game metrics to TensorBoard (default: 60000)
 
 ### TensorBoard Monitoring
 

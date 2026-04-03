@@ -11,7 +11,7 @@ Usage:
       --timesteps 4000000 \
       --min-timesteps 1000000 \     #Remove this line (or 0) to disable plateau check
       --cross-loop-threshold 0.55 \
-      --eval-episodes 300 \
+      --eval-episodes 200 \
       --envs 7 \
       --baseline-model models/base_line_model.zip
 """
@@ -74,12 +74,13 @@ def bootstrap_manifest(baseline_model: str) -> dict:
 
 
 def append_loop_to_manifest(manifest: dict, loop_n: int, model_path: str,
-                             opponent_pool: list[str], timesteps: int,
-                             results_vs_prev: dict, results_vs_baseline: dict):
+                             opponent_pool: list[str], opponent_weights: list[float],
+                             timesteps: int, results_vs_prev: dict, results_vs_baseline: dict):
     entry = {
         "loop": loop_n,
         "model_path": model_path,
         "opponent_pool": opponent_pool,
+        "opponent_weights": opponent_weights,
         "timesteps_trained": timesteps,
         "win_rate_vs_prev": results_vs_prev["win_rate"],
         "win_rate_vs_baseline": results_vs_baseline["win_rate"],
@@ -150,8 +151,36 @@ def select_difficulty_models(manifest: dict) -> bool:
     return True
 
 
+def build_opponent_pool(manifest: dict, pool_lookback: int) -> tuple[list[str], list[float]]:
+    """
+    Build the opponent pool for the next training loop.
+
+    Always keeps the baseline (loop 0) for stylistic diversity, then takes the
+    last `pool_lookback` RL loops. Weights are linear (1, 2, …, N) so recent
+    opponents are sampled more often; the baseline always gets weight 1.
+
+    Returns:
+        pool:    list of model paths
+        weights: corresponding sampling weights
+    """
+    all_loops = manifest["loops"]
+    baseline = next((e for e in all_loops if e["loop"] == BASELINE_LOOP), None)
+    rl_loops = [e for e in all_loops if e["loop"] != BASELINE_LOOP]
+
+    recent_rl = rl_loops[-pool_lookback:] if pool_lookback > 0 else rl_loops
+    selected = ([baseline] if baseline else []) + recent_rl
+
+    n = len(selected)
+    # Baseline always gets weight 1; RL loops get linearly increasing weights
+    # so the most recent opponent is sampled most.
+    weights = [1.0] + list(range(1, len(recent_rl) + 1)) if baseline else list(range(1, n + 1))
+
+    pool = [e["model_path"] for e in selected]
+    return pool, [float(w) for w in weights]
+
+
 def run_training_loop(loop_n: int, model_save_dir: str, opponent_pool: list[str],
-                      args: argparse.Namespace):
+                      opponent_weights: list[float], args: argparse.Namespace):
     """Launch a training subprocess for one loop."""
     cmd = [
         sys.executable, str(Path(__file__).parent.parent / "training" / "train.py"),
@@ -167,12 +196,14 @@ def run_training_loop(loop_n: int, model_save_dir: str, opponent_pool: list[str]
         "--game-eval-freq", str(args.game_eval_freq),
         "--baseline-model", args.baseline_model,
         "--opponent-models", *opponent_pool,
+        "--opponent-weights", *[str(w) for w in opponent_weights],
+        "--tb-log-name", f"loop_{loop_n:02d}",
     ]
-    print(f"\n[Loop {loop_n}] Training against pool: {opponent_pool}")
-    print(f"[Loop {loop_n}] Saving to: {model_save_dir}")
+    print(f"\n[Loop {loop_n:02d}] Training against pool: {opponent_pool} (weights: {opponent_weights})")
+    print(f"[Loop {loop_n:02d}] Saving to: {model_save_dir}")
     result = subprocess.run(cmd)
     if result.returncode != 0:
-        print(f"[Loop {loop_n}] Training subprocess failed (exit {result.returncode}).")
+        print(f"[Loop {loop_n:02d}] Training subprocess failed (exit {result.returncode}).")
         return False
     return True
 
@@ -184,14 +215,16 @@ def main():
     parser.add_argument("--min-timesteps", type=int, default=1_000_000, help="Min timesteps before plateau check")
     parser.add_argument("--plateau-window", type=int, default=5, help="Plateau detection window (game evals)")
     parser.add_argument("--plateau-threshold", type=float, default=0.02, help="Plateau win-rate range threshold")
+    parser.add_argument("--pool-lookback", type=int, default=3,
+                        help="Keep baseline + last N RL loops in opponent pool (default: 3; 0 = keep all)")
     parser.add_argument("--cross-loop-threshold", type=float, default=0.55,
                         help="Min win rate vs prev loop to continue (default: 0.55)")
-    parser.add_argument("--eval-episodes", type=int, default=500, help="Episodes for cross-loop evaluation")
+    parser.add_argument("--eval-episodes", type=int, default=200, help="Episodes for cross-loop evaluation")
     parser.add_argument("--envs", type=int, default=max(1, (os.cpu_count() or 4) - 1),
                         help="Parallel environments per training run")
     parser.add_argument("--maxsteps", type=int, default=500, help="Max steps per episode")
     parser.add_argument("--maxstepsbyturn", type=int, default=36, help="Max steps per turn")
-    parser.add_argument("--game-eval-freq", type=int, default=10000, help="Game metrics eval frequency")
+    parser.add_argument("--game-eval-freq", type=int, default=60000, help="Game metrics eval frequency")
     parser.add_argument("--baseline-model", default="models/base_line_model.zip",
                         help="Fixed reference model for baseline evaluation")
     parser.add_argument("--start-loop", type=int, default=None,
@@ -210,26 +243,41 @@ def main():
     start_loop = args.start_loop or (max(existing_loops) + 1 if existing_loops else BASELINE_LOOP + 1)
     end_loop = start_loop + args.max_loops - 1
 
-    print(f"\n[Pipeline] Starting from loop {start_loop}, max loop {end_loop}")
-    print(f"[Pipeline] Baseline: {args.baseline_model}")
-    print(f"[Pipeline] Cross-loop threshold: {args.cross_loop_threshold:.0%}")
+    print(f"\n{'='*60}")
+    print(f"Pipeline Parameters")
+    print(f"{'='*60}")
+    print(f"  baseline-model:        {args.baseline_model}")
+    print(f"  start-loop:            {start_loop:02d}  (end: {end_loop:02d})")
+    print(f"  max-loops:             {args.max_loops}")
+    print(f"  timesteps:             {args.timesteps:,}")
+    print(f"  min-timesteps:         {args.min_timesteps:,}")
+    print(f"  envs:                  {args.envs}")
+    print(f"  maxsteps:              {args.maxsteps}")
+    print(f"  maxstepsbyturn:        {args.maxstepsbyturn}")
+    print(f"  game-eval-freq:        {args.game_eval_freq:,}")
+    print(f"  eval-episodes:         {args.eval_episodes}")
+    print(f"  pool-lookback:         {args.pool_lookback} (0 = keep all)")
+    print(f"  cross-loop-threshold:  {args.cross_loop_threshold:.0%}")
+    print(f"  plateau-window:        {args.plateau_window}")
+    print(f"  plateau-threshold:     {args.plateau_threshold}")
+    print(f"{'='*60}")
 
     for loop_n in range(start_loop, end_loop + 1):
-        # Build opponent pool from all registered loops (linear weights: recent favored)
-        pool = [e["model_path"] for e in manifest["loops"]]
+        # Build pruned opponent pool: baseline + last N RL loops, with linear weights
+        pool, weights = build_opponent_pool(manifest, args.pool_lookback)
         model_save_dir = f"src/pipeline/models/loop_{loop_n}"
         best_model_path = os.path.join(model_save_dir, "best_model.zip")
         fallback_model_path = os.path.join(model_save_dir, "ppo_pylinkx.zip")
 
         # Train
-        success = run_training_loop(loop_n, model_save_dir, pool, args)
+        success = run_training_loop(loop_n, model_save_dir, pool, weights, args)
         if not success:
-            print(f"[Pipeline] Stopping due to training failure at loop {loop_n}.")
+            print(f"[Pipeline] Stopping due to training failure at loop {loop_n:02d}.")
             break
 
         if not os.path.exists(best_model_path):
             if os.path.exists(fallback_model_path):
-                print(f"[Loop {loop_n}] No best_model.zip found, using ppo_pylinkx.zip as fallback.")
+                print(f"[Loop {loop_n:02d}] No best_model.zip found, using ppo_pylinkx.zip as fallback.")
                 best_model_path = fallback_model_path
             else:
                 print(f"[Pipeline] No model found in {model_save_dir}. Stopping.")
@@ -237,7 +285,7 @@ def main():
 
         # Evaluate vs previous loop (for cross-loop stopping)
         prev_model = manifest["loops"][-1]["model_path"]
-        print(f"\n[Loop {loop_n}] Evaluating vs previous ({prev_model})...")
+        print(f"\n[Loop {loop_n:02d}] Evaluating vs previous ({prev_model})...")
         results_vs_prev = evaluate_agent(
             model_path=best_model_path,
             num_episodes=args.eval_episodes,
@@ -247,7 +295,7 @@ def main():
         )
 
         # Evaluate vs fixed baseline (for comparable strength metric)
-        print(f"[Loop {loop_n}] Evaluating vs baseline ({args.baseline_model})...")
+        print(f"[Loop {loop_n:02d}] Evaluating vs baseline ({args.baseline_model})...")
         results_vs_baseline = evaluate_agent(
             model_path=best_model_path,
             num_episodes=args.eval_episodes,
@@ -257,15 +305,15 @@ def main():
         )
 
         # Update manifest
-        append_loop_to_manifest(manifest, loop_n, best_model_path, pool,
+        append_loop_to_manifest(manifest, loop_n, best_model_path, pool, weights,
                                  args.timesteps, results_vs_prev, results_vs_baseline)
 
-        print(f"\n[Loop {loop_n}] win_rate_vs_prev={results_vs_prev['win_rate']:.1%}  "
+        print(f"\n[Loop {loop_n:02d}] win_rate_vs_prev={results_vs_prev['win_rate']:.1%}  "
               f"win_rate_vs_baseline={results_vs_baseline['win_rate']:.1%}")
 
         # Cross-loop stopping
         if results_vs_prev["win_rate"] < args.cross_loop_threshold:
-            print(f"[Pipeline] Loop {loop_n} win rate vs prev "
+            print(f"[Pipeline] Loop {loop_n:02d} win rate vs prev "
                   f"{results_vs_prev['win_rate']:.1%} < {args.cross_loop_threshold:.0%} — stopping.")
             break
 

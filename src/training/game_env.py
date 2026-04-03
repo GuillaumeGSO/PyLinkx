@@ -327,7 +327,13 @@ class PyLinkxEnv(gym.Env):
 
         # After P1's action, if it's now P2's turn, play P2's turn internally
         if not terminated and self.game.players.index(self.game.current_player) != 0:
+            old_p2_progress = list(self._path_progress[1])
             self._play_opponent_turn()
+            # Penalize P1 for opponent path progress gained during P2's turn
+            new_p2_progress = self._path_progress[1]
+            p2_progress_delta = max(new_p2_progress[0] - old_p2_progress[0],
+                                    new_p2_progress[1] - old_p2_progress[1])
+            reward -= p2_progress_delta * 5.0
             # Re-check termination (P2 might have won during their turn)
             terminated = self.game.status == Game.GAMEOVER
             if terminated and self.game.winner and self.game.winner != self.game.players[0]:
