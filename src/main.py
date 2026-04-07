@@ -125,13 +125,14 @@ async def main(ai_model_override=None, ai_delay: int = 150):
                     elif event.key == pygame.K_DOWN:
                         menu_cursor = (menu_cursor + 1) % len(MenuRenderer.MENU_ITEMS)
                     elif event.key == pygame.K_RETURN:
-                        if menu_cursor == 0:          # 2 Players
+                        chosen = MenuRenderer.MENU_ITEMS[menu_cursor]
+                        if chosen == "2 Human Players":
                             ai_model = None
                             start_game()
                             app_state = PLAYING
-                        elif menu_cursor == 1:        # vs Computer
+                        elif chosen == "Human vs Computer":
                             app_state = DIFFICULTY
-                        elif menu_cursor == 2:        # How to Play
+                        elif chosen == "How to Play":
                             app_state = HOW_TO_PLAY
 
                 elif app_state == DIFFICULTY:

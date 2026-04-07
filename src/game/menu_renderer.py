@@ -1,6 +1,10 @@
+import sys
+
 import pygame
 
 from .game_renderer import _draw_gradient, _FONT
+
+_IS_WASM = sys.platform == "emscripten"
 
 
 class MenuRenderer:
@@ -8,7 +12,8 @@ class MenuRenderer:
     SCREEN_WIDTH = 1000
     SCREEN_HEIGHT = 600
 
-    MENU_ITEMS = ["2 Human Players", "Human vs Computer", "How to Play"]
+    MENU_ITEMS = (["2 Human Players", "How to Play"] if _IS_WASM
+                  else ["2 Human Players", "Human vs Computer", "How to Play"])
     DIFF_ITEMS = ["Easy", "Medium", "Hard", "< Back"]
 
     GOLD = (255, 215, 0)
