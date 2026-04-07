@@ -137,7 +137,7 @@ class GameMetricsCallback(BaseCallback):
         env = PyLinkxEnv(**self._eval_env_kwargs)
         env = ActionMasker(env, lambda e: e.valid_action_mask())
 
-        wins, path_wins, score_wins, losses, total_p2_drops = 0, 0, 0, 0, 0
+        wins, path_wins, score_wins, losses, total_p1_drops, total_p2_drops = 0, 0, 0, 0, 0, 0
 
         for _ in range(self._n_eval_episodes):
             obs, info = env.reset()
@@ -156,6 +156,7 @@ class GameMetricsCallback(BaseCallback):
                     score_wins += 1
             elif info.get("winner_idx") == 1:
                 losses += 1
+            total_p1_drops += info.get("p1_drops", 0)
             total_p2_drops += info.get("p2_drops", 0)
 
         env.close()
@@ -166,6 +167,7 @@ class GameMetricsCallback(BaseCallback):
         self.logger.record("game/path_win_rate", path_wins / n)
         self.logger.record("game/score_win_rate", score_wins / n)
         self.logger.record("game/loss_rate", losses / n)
+        self.logger.record("game/mean_p1_drops", total_p1_drops / n)
         self.logger.record("game/mean_p2_drops", total_p2_drops / n)
 
         # Plateau detection
@@ -363,6 +365,7 @@ def evaluate_agent(
 
     episode_rewards = []
     episode_lengths = []
+    p1_drops_list = []
     p2_drops_list = []
     wins, path_wins, score_wins, losses = 0, 0, 0, 0
 
@@ -405,6 +408,7 @@ def evaluate_agent(
 
         episode_rewards.append(episode_reward)
         episode_lengths.append(episode_length)
+        p1_drops_list.append(info.get("p1_drops", 0))
         p2_drops_list.append(info.get("p2_drops", 0))
 
         if info.get("winner_idx") == 0:
@@ -419,7 +423,7 @@ def evaluate_agent(
         winner = "P1" if info.get("winner_idx") == 0 else ("P2" if info.get("winner_idx") == 1 else "None")
         print(
             f"   Episode {episode + 1:3d}: Reward = {episode_reward:7.2f}, "
-            f"Length = {episode_length:4d}, P2 Drops = {info.get('p2_drops', 0)}, "
+            f"Length = {episode_length:4d}, P1 Drops = {info.get('p1_drops', 0)}, P2 Drops = {info.get('p2_drops', 0)}, "
             f"Winner = {winner} ({info.get('win_type', '-')})"
         )
 
@@ -436,6 +440,7 @@ def evaluate_agent(
     )
     print(f"   Max Reward:      {np.max(episode_rewards):.2f}")
     print(f"   Min Reward:      {np.min(episode_rewards):.2f}")
+    print(f"   Mean P1 Drops:   {np.mean(p1_drops_list):.1f} ± {np.std(p1_drops_list):.1f}")
     print(f"   Mean P2 Drops:   {np.mean(p2_drops_list):.1f} ± {np.std(p2_drops_list):.1f}")
 
     env.close()
@@ -449,6 +454,7 @@ def evaluate_agent(
         "mean_reward": float(np.mean(episode_rewards)),
         "rewards": episode_rewards,
         "lengths": episode_lengths,
+        "p1_drops": p1_drops_list,
         "p2_drops": p2_drops_list,
     }
 

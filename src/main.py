@@ -33,10 +33,15 @@ GAMEOVER = "gameover"
 FPS = 10
 MAX_STEPS_BY_TURN = 36
 
+# In WASM (pygbag), non-Python files are served under /assets/; locally use __file__-relative path
+if sys.platform == "emscripten":
+    _MODELS_DIR = "/assets/models"
+else:
+    _MODELS_DIR = str(Path(__file__).parent / "models")
 MODEL_PATHS = {
-    "easy":   "models/easy_model.zip",
-    "medium": "models/medium_model.zip",
-    "hard":   "models/hard_model.zip",
+    "easy":   f"{_MODELS_DIR}/easy_model.zip",
+    "medium": f"{_MODELS_DIR}/medium_model.zip",
+    "hard":   f"{_MODELS_DIR}/hard_model.zip",
 }
 DIFF_KEYS = ["easy", "medium", "hard"]  # maps diff_cursor 0-2 to keys
 

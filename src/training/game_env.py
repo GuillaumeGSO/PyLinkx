@@ -257,6 +257,7 @@ class PyLinkxEnv(gym.Env):
         self._path_progress = [[0.0, 0.0], [0.0, 0.0]]
         self.valid_action = True
         self._score_delta = 0.0
+        self._p1_drops = 0
         self._p2_drops = 0
 
         # Initialize first piece
@@ -312,6 +313,7 @@ class PyLinkxEnv(gym.Env):
         # Reset turn counter on successful drop; update path progress cache
         progress_delta = (0.0, 0.0)
         if action == Actions.ACTION_DROP and self.valid_action:
+            self._p1_drops += 1
             self.steps_for_current_turn = 0
             new_progress = self._compute_path_progress(acting_player_idx)
             self._path_progress[acting_player_idx] = list(new_progress)
@@ -439,6 +441,7 @@ class PyLinkxEnv(gym.Env):
             "win_type": self.game.win_type,  # 'path' or 'score' or None
             "step_count": self.step_count,
             "action_valid": action_valid,
+            "p1_drops": self._p1_drops,
             "p2_drops": self._p2_drops,
         }
 

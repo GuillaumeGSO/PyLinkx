@@ -81,7 +81,8 @@ The codebase is split into pure game logic and the RL wrapper:
 - `manifest.json` — Tracks training history, per-loop metrics, and the selected difficulty triplet.
 
 **Model directories**:
-- `models/` (project root) — Game-ready models committed to the repo: `base_line_model.zip`, `easy_model.zip`, `medium_model.zip`, `hard_model.zip`.
+- `src/models/` — Game-ready difficulty models bundled with the itch.io web build: `easy_model.zip`, `medium_model.zip`, `hard_model.zip`. Loaded by `main.py` via `__file__`-relative paths.
+- `models/` (project root) — Training working directory: `base_line_model.zip`, `ppo_pylinkx.zip` (output of `train.py`). Not bundled in the web build.
 - `src/pipeline/models/` — Pipeline working directory. Loop checkpoints produced during training runs.
 
 **Key design constraint**: `pytest.ini` sets `pythonpath = .` (project root), so all imports use the full `src.` prefix (e.g., `from src.game.game import Game`). Intra-package imports within `src/game/` use relative form (e.g., `from .piece import Piece`). Scripts run directly (`main.py`, `train.py`, `pipeline.py`, `evaluate_matrix.py`) insert the project root into `sys.path` at startup so the same import style works when executed as scripts.
