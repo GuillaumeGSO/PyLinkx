@@ -1,0 +1,234 @@
+name: Build & Deploy to itch.io
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+jobs:
+  # ── 0. Tests ───────────────────────────────────────────────────────────────
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  # ── 1. Web build (pygbag) ─────────────────────────────────────────────────
+  build-web:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install pygbag pygame-ce
+
+      - name: Build web
+        working-directory: src
+        run: pygbag --build main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-web
+          path: src/build/web/
+
+  # ── 2. Windows build (PyInstaller) ────────────────────────────────────────
+  build-windows:
+    needs: [test]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-build.txt
+
+      - name: Build exe
+        run: >
+          pyinstaller --onefile --windowed --name PyLinkx
+          --paths src
+          --add-data "src/models;models"
+          --add-data "src/assets;assets"
+          --hidden-import game.game
+          --hidden-import game.game_renderer
+          --hidden-import game.menu_renderer
+          --hidden-import game.player
+          --hidden-import game.piece
+          --hidden-import sb3_contrib
+          --collect-data stable_baselines3
+          --collect-data sb3_contrib
+          src/main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-windows
+          path: dist/
+
+  # ── 3. macOS build (PyInstaller) ──────────────────────────────────────────
+  build-macos:
+    needs: [test]
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-build.txt
+
+      - name: Build app
+        run: >
+          pyinstaller --onefile --windowed --name PyLinkx
+          --paths src
+          --add-data "src/models:models"
+          --add-data "src/assets:assets"
+          --hidden-import game.game
+          --hidden-import game.game_renderer
+          --hidden-import game.menu_renderer
+          --hidden-import game.player
+          --hidden-import game.piece
+          --hidden-import sb3_contrib
+          --collect-data stable_baselines3
+          --collect-data sb3_contrib
+          src/main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-macos
+          path: dist/
+
+  # ── 4. Linux build (PyInstaller) ──────────────────────────────────────────
+  build-linux:
+    needs: [test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements-build.txt
+
+      - name: Build binary
+        run: >
+          pyinstaller --onefile --name PyLinkx
+          --paths src
+          --add-data "src/models:models"
+          --add-data "src/assets:assets"
+          --hidden-import game.game
+          --hidden-import game.game_renderer
+          --hidden-import game.menu_renderer
+          --hidden-import game.player
+          --hidden-import game.piece
+          --hidden-import sb3_contrib
+          --collect-data stable_baselines3
+          --collect-data sb3_contrib
+          src/main.py
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-linux
+          path: dist/
+
+  # ── 5. Deploy to itch.io (butler) ─────────────────────────────────────────
+  deploy:
+    needs: [build-web, build-windows, build-macos, build-linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            .itch.toml
+            version.py
+          sparse-checkout-cone-mode: false
+
+      - name: Read itch.io config
+        id: itch
+        run: |
+          echo "user=$(grep 'user' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+          echo "game=$(grep 'game' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Read version
+        id: version
+        run: |
+          echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-web
+          path: ./artifacts/web
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-windows
+          path: ./artifacts/windows
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-macos
+          path: ./artifacts/macos
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-linux
+          path: ./artifacts/linux
+
+      - name: Push web
+        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        with:
+          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
+          itch_user: ${{ steps.itch.outputs.user }}
+          itch_game: ${{ steps.itch.outputs.game }}
+          channel: html5
+          version: ${{ steps.version.outputs.tag }}
+          package: ./artifacts/web/
+
+      - name: Push windows
+        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        with:
+          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
+          itch_user: ${{ steps.itch.outputs.user }}
+          itch_game: ${{ steps.itch.outputs.game }}
+          channel: windows
+          version: ${{ steps.version.outputs.tag }}
+          package: ./artifacts/windows/
+
+      - name: Push macos
+        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        with:
+          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
+          itch_user: ${{ steps.itch.outputs.user }}
+          itch_game: ${{ steps.itch.outputs.game }}
+          channel: osx
+          version: ${{ steps.version.outputs.tag }}
+          package: ./artifacts/macos/
+
+      - name: Push linux
+        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        with:
+          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
+          itch_user: ${{ steps.itch.outputs.user }}
+          itch_game: ${{ steps.itch.outputs.game }}
+          channel: linux
+          version: ${{ steps.version.outputs.tag }}
+          package: ./artifacts/linux/

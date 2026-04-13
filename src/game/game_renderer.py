@@ -1,3 +1,4 @@
+import sys
 from pathlib import Path
 
 import pygame
@@ -5,7 +6,11 @@ import pygame
 from .game import Game
 from .piece import Piece
 
-_FONT = str(Path(__file__).parent.parent / "assets" / "fonts" / "PressStart2P-Regular.ttf")
+if getattr(sys, 'frozen', False):
+    _BASE = Path(sys._MEIPASS)
+else:
+    _BASE = Path(__file__).parent.parent
+_FONT = str(_BASE / "assets" / "fonts" / "PressStart2P-Regular.ttf")
 
 
 def _draw_gradient(screen, color_top, color_bottom, rect):

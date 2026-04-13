@@ -4,6 +4,11 @@ import pygame
 
 from .game_renderer import _draw_gradient, _FONT
 
+try:
+    from version import __version__
+except ImportError:
+    __version__ = ""
+
 _IS_WASM = sys.platform == "emscripten"
 
 
@@ -46,6 +51,7 @@ class MenuRenderer:
         self.font_item = pygame.font.Font(_FONT, 18)
         self.font_hint = pygame.font.Font(_FONT, 10)
         self.font_section = pygame.font.Font(_FONT, 13)
+        self.font_version = pygame.font.Font(_FONT, 8)
 
     # ------------------------------------------------------------------
     # Shared
@@ -88,6 +94,10 @@ class MenuRenderer:
         hint = self.font_hint.render("UP/DN Navigate   ENTER Select", True, self.DIM)
         self.screen.blit(hint, (self.SCREEN_WIDTH // 2 - hint.get_width() // 2,
                                 self.SCREEN_HEIGHT - 40))
+        if __version__:
+            ver = self.font_version.render(f"v{__version__}", True, self.DIM)
+            self.screen.blit(ver, (self.SCREEN_WIDTH - ver.get_width() - 8,
+                                   self.SCREEN_HEIGHT - ver.get_height() - 6))
 
     # ------------------------------------------------------------------
     # Difficulty sub-menu
