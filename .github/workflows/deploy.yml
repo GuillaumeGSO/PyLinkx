@@ -157,7 +157,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          sparse-checkout: .itch.toml
+          sparse-checkout: |
+            .itch.toml
+            version.py
           sparse-checkout-cone-mode: false
 
       - name: Read itch.io config
@@ -165,6 +167,11 @@ jobs:
         run: |
           echo "user=$(grep 'user' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
           echo "game=$(grep 'game' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Read version
+        id: version
+        run: |
+          echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - uses: actions/download-artifact@v4
         with:
@@ -193,6 +200,7 @@ jobs:
           itch_user: ${{ steps.itch.outputs.user }}
           itch_game: ${{ steps.itch.outputs.game }}
           channel: html5
+          version: ${{ steps.version.outputs.tag }}
           package: ./artifacts/web/
 
       - name: Push windows
@@ -202,6 +210,7 @@ jobs:
           itch_user: ${{ steps.itch.outputs.user }}
           itch_game: ${{ steps.itch.outputs.game }}
           channel: windows
+          version: ${{ steps.version.outputs.tag }}
           package: ./artifacts/windows/
 
       - name: Push macos
@@ -211,6 +220,7 @@ jobs:
           itch_user: ${{ steps.itch.outputs.user }}
           itch_game: ${{ steps.itch.outputs.game }}
           channel: osx
+          version: ${{ steps.version.outputs.tag }}
           package: ./artifacts/macos/
 
       - name: Push linux
@@ -220,4 +230,5 @@ jobs:
           itch_user: ${{ steps.itch.outputs.user }}
           itch_game: ${{ steps.itch.outputs.game }}
           channel: linux
+          version: ${{ steps.version.outputs.tag }}
           package: ./artifacts/linux/
