@@ -121,7 +121,8 @@ Opens a local server at `http://localhost:8000` — verify the game works in bro
 │   ├── test_game_*.py               # Game logic tests
 │   ├── test_player_*.py             # Player scoring tests
 │   └── test_rl_env.py               # Gymnasium environment tests
-├── models/                          # Game-ready model checkpoints
+├── models/                          # Training working directory (ppo_pylinkx.zip, base_line_model.zip)
+├── src/models/                      # Game-ready difficulty models bundled in itch.io web build
 ├── requirements.txt
 └── README.md
 ```

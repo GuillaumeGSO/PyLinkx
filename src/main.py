@@ -33,10 +33,15 @@ GAMEOVER = "gameover"
 FPS = 10
 MAX_STEPS_BY_TURN = 36
 
+# In WASM (pygbag), non-Python files are served under /assets/; locally use __file__-relative path
+if sys.platform == "emscripten":
+    _MODELS_DIR = "/assets/models"
+else:
+    _MODELS_DIR = str(Path(__file__).parent / "models")
 MODEL_PATHS = {
-    "easy":   "models/easy_model.zip",
-    "medium": "models/medium_model.zip",
-    "hard":   "models/hard_model.zip",
+    "easy":   f"{_MODELS_DIR}/easy_model.zip",
+    "medium": f"{_MODELS_DIR}/medium_model.zip",
+    "hard":   f"{_MODELS_DIR}/hard_model.zip",
 }
 DIFF_KEYS = ["easy", "medium", "hard"]  # maps diff_cursor 0-2 to keys
 
@@ -120,13 +125,14 @@ async def main(ai_model_override=None, ai_delay: int = 150):
                     elif event.key == pygame.K_DOWN:
                         menu_cursor = (menu_cursor + 1) % len(MenuRenderer.MENU_ITEMS)
                     elif event.key == pygame.K_RETURN:
-                        if menu_cursor == 0:          # 2 Players
+                        chosen = MenuRenderer.MENU_ITEMS[menu_cursor]
+                        if chosen == "2 Human Players":
                             ai_model = None
                             start_game()
                             app_state = PLAYING
-                        elif menu_cursor == 1:        # vs Computer
+                        elif chosen == "Human vs Computer":
                             app_state = DIFFICULTY
-                        elif menu_cursor == 2:        # How to Play
+                        elif chosen == "How to Play":
                             app_state = HOW_TO_PLAY
 
                 elif app_state == DIFFICULTY:
