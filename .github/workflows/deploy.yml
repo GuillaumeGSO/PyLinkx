@@ -193,42 +193,32 @@ jobs:
           name: build-linux
           path: ./artifacts/linux
 
+      - name: Install butler
+        run: |
+          mkdir -p ./tools
+          curl -sSLfo ./tools/butler.zip "https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default"
+          unzip -o ./tools/butler.zip -d ./tools
+          chmod +x ./tools/butler
+          ./tools/butler -V
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
+
       - name: Push web
-        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
-        with:
-          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
-          itch_user: ${{ steps.itch.outputs.user }}
-          itch_game: ${{ steps.itch.outputs.game }}
-          channel: html5
-          version: ${{ steps.version.outputs.tag }}
-          package: ./artifacts/web/
+        run: ./tools/butler push ./artifacts/web/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:html5 --userversion ${{ steps.version.outputs.tag }}
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
 
       - name: Push windows
-        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
-        with:
-          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
-          itch_user: ${{ steps.itch.outputs.user }}
-          itch_game: ${{ steps.itch.outputs.game }}
-          channel: windows
-          version: ${{ steps.version.outputs.tag }}
-          package: ./artifacts/windows/
+        run: ./tools/butler push ./artifacts/windows/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:windows --userversion ${{ steps.version.outputs.tag }}
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
 
       - name: Push macos
-        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
-        with:
-          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
-          itch_user: ${{ steps.itch.outputs.user }}
-          itch_game: ${{ steps.itch.outputs.game }}
-          channel: osx
-          version: ${{ steps.version.outputs.tag }}
-          package: ./artifacts/macos/
+        run: ./tools/butler push ./artifacts/macos/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:osx --userversion ${{ steps.version.outputs.tag }}
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
 
       - name: Push linux
-        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
-        with:
-          api-key: ${{ secrets.BUTLER_CREDENTIALS }}
-          itch_user: ${{ steps.itch.outputs.user }}
-          itch_game: ${{ steps.itch.outputs.game }}
-          channel: linux
-          version: ${{ steps.version.outputs.tag }}
-          package: ./artifacts/linux/
+        run: ./tools/butler push ./artifacts/linux/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:linux --userversion ${{ steps.version.outputs.tag }}
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
