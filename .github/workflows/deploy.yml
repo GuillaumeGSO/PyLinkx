@@ -10,9 +10,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -27,9 +27,9 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.11"
 
@@ -40,7 +40,7 @@ jobs:
         working-directory: src
         run: pygbag --build main.py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: build-web
           path: src/build/web/
@@ -50,9 +50,9 @@ jobs:
     needs: [test]
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -75,7 +75,7 @@ jobs:
           --collect-data sb3_contrib
           src/main.py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: build-windows
           path: dist/
@@ -85,9 +85,9 @@ jobs:
     needs: [test]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -110,7 +110,7 @@ jobs:
           --collect-data sb3_contrib
           src/main.py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: build-macos
           path: dist/
@@ -120,9 +120,9 @@ jobs:
     needs: [test]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -145,7 +145,7 @@ jobs:
           --collect-data sb3_contrib
           src/main.py
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: build-linux
           path: dist/
@@ -155,7 +155,7 @@ jobs:
     needs: [build-web, build-windows, build-macos, build-linux]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           sparse-checkout: |
             .itch.toml
@@ -173,28 +173,28 @@ jobs:
         run: |
           echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: build-web
           path: ./artifacts/web
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: build-windows
           path: ./artifacts/windows
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: build-macos
           path: ./artifacts/macos
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v5
         with:
           name: build-linux
           path: ./artifacts/linux
 
       - name: Push web
-        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
         with:
           api-key: ${{ secrets.BUTLER_CREDENTIALS }}
           itch_user: ${{ steps.itch.outputs.user }}
@@ -204,7 +204,7 @@ jobs:
           package: ./artifacts/web/
 
       - name: Push windows
-        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
         with:
           api-key: ${{ secrets.BUTLER_CREDENTIALS }}
           itch_user: ${{ steps.itch.outputs.user }}
@@ -214,7 +214,7 @@ jobs:
           package: ./artifacts/windows/
 
       - name: Push macos
-        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
         with:
           api-key: ${{ secrets.BUTLER_CREDENTIALS }}
           itch_user: ${{ steps.itch.outputs.user }}
@@ -224,7 +224,7 @@ jobs:
           package: ./artifacts/macos/
 
       - name: Push linux
-        uses: Oval-Tutu/publish-to-itch-with-butler@v1
+        uses: Oval-Tutu/publish-to-itch-with-butler@1.0.0
         with:
           api-key: ${{ secrets.BUTLER_CREDENTIALS }}
           itch_user: ${{ steps.itch.outputs.user }}
