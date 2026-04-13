@@ -2,6 +2,8 @@
 __pycache__/
 .pytest_cache/
 build/
+dist/
+*.spec
 *.py[cod]
 *$py.class
 
@@ -25,6 +27,3 @@ Thumbs.db
 # Test and log files
 logs/
 *.log
-
-# itch.io deploy config
-.itch.toml

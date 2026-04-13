@@ -33,9 +33,13 @@ GAMEOVER = "gameover"
 FPS = 10
 MAX_STEPS_BY_TURN = 36
 
-# In WASM (pygbag), non-Python files are served under /assets/; locally use __file__-relative path
+# In WASM (pygbag), non-Python files are served under /assets/;
+# in a PyInstaller frozen build, data files live under sys._MEIPASS;
+# otherwise use __file__-relative path.
 if sys.platform == "emscripten":
     _MODELS_DIR = "/assets/models"
+elif getattr(sys, 'frozen', False):
+    _MODELS_DIR = str(Path(sys._MEIPASS) / "models")
 else:
     _MODELS_DIR = str(Path(__file__).parent / "models")
 MODEL_PATHS = {
@@ -218,6 +222,9 @@ async def main(ai_model_override=None, ai_delay: int = 150):
 
 
 if __name__ == "__main__":
+    import multiprocessing
+    multiprocessing.freeze_support()
+
     parser = argparse.ArgumentParser(description="PyLinkx — human vs human or human vs AI")
     parser.add_argument("--ai-model", default=None,
                         help="Path to model zip (AI plays as P1, human as P2) — bypasses menu")

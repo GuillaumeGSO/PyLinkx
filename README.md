@@ -10,7 +10,8 @@ PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasiu
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r requirements.txt          # runtime only (play the game)
+pip install -r requirements-dev.txt      # adds pytest, pygbag, tensorboard
 ```
 
 ## Usage
@@ -226,9 +227,14 @@ This requires training many models through the self-play curriculum, evaluating 
 
 ## Dependencies
 
+**Runtime** (`requirements.txt`):
 - **pygame-ce** — game rendering and UI (Community Edition, with WebAssembly support)
 - **gymnasium** — RL environment standard
 - **numpy** — numerical computing
-- **sb3-contrib** — MaskablePPO with action masking
 - **stable-baselines3** — PPO base implementation
+- **sb3-contrib** — MaskablePPO with action masking
+
+**Dev/build** (`requirements-dev.txt`):
+- **stable-baselines3[extra]** — adds TensorBoard logging
 - **pytest** — testing framework
+- **pygbag** — web build for itch.io
