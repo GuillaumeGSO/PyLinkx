@@ -196,7 +196,7 @@ jobs:
       - name: Install butler
         run: |
           mkdir -p ./tools
-          curl -sSLfo ./tools/butler.zip "https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default"
+          curl -sSLfo ./tools/butler.zip "https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default"
           unzip -o ./tools/butler.zip -d ./tools
           chmod +x ./tools/butler
           ./tools/butler -V
