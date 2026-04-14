@@ -12,15 +12,16 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install -r requirements-dev.txt
+        run: uv sync --group dev
 
       - name: Run tests
-        run: pytest -v
+        run: uv run pytest -v
 
   # ── 1. Web build (pygbag) ─────────────────────────────────────────────────
   build-web:
@@ -29,16 +30,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.11"
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install pygbag pygame-ce
+        run: uv sync --group dev
 
       - name: Build web
         working-directory: src
-        run: pygbag --build main.py
+        run: uv run pygbag --build main.py
 
       - uses: actions/upload-artifact@v5
         with:
@@ -52,16 +54,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install -r requirements-build.txt
+        run: uv sync --group build
 
       - name: Build exe
         run: >
-          pyinstaller --onefile --windowed --name PyLinkx
+          uv run pyinstaller --onefile --windowed --name PyLinkx
           --paths src
           --add-data "src/models;models"
           --add-data "src/assets;assets"
@@ -87,16 +90,17 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
-        run: pip install -r requirements-build.txt
+        run: uv sync --group build
 
       - name: Build app
         run: >
-          pyinstaller --onefile --windowed --name PyLinkx
+          uv run pyinstaller --onefile --windowed --name PyLinkx
           --paths src
           --add-data "src/models:models"
           --add-data "src/assets:assets"
@@ -122,18 +126,19 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v6
+      - uses: astral-sh/setup-uv@v6
         with:
           python-version: "3.12"
+          enable-cache: true
 
       - name: Install dependencies
         run: |
-          pip install -r requirements-build.txt
-          pip install torch --index-url https://download.pytorch.org/whl/cpu --force-reinstall
+          uv sync --group build
+          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
 
       - name: Build binary
         run: >
-          pyinstaller --onefile --name PyLinkx
+          uv run pyinstaller --onefile --name PyLinkx
           --paths src
           --add-data "src/models:models"
           --add-data "src/assets:assets"

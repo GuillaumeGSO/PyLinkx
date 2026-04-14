@@ -1,4 +1,0 @@
--r requirements.txt
-stable-baselines3[extra]>=2.0.0
-pytest
-pygbag
