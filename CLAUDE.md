@@ -9,55 +9,68 @@ PyLinkx is a two-player block placement game (on a 9x9 grid) with a Gymnasium RL
 ## Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt          # runtime deps (play the game)
-pip install -r requirements-dev.txt      # adds pytest, pygbag, tensorboard
+uv sync                          # install runtime deps (play the game)
+uv sync --group dev              # adds pytest, pygbag
+uv sync --group dev --group build  # adds pyinstaller (needed for building executables)
 ```
 
 ## Running Commands
 
-**Always activate the venv before running any Python command** — each Bash tool call is a fresh shell, so prefix every command with the activation:
+**Prefix Python commands with `uv run`** — this ensures the project venv is used without manual activation, no `source .venv/bin/activate` needed:
 
 ```bash
-source .venv/bin/activate && <command>
+uv run <command>
 ```
+
+`source .venv/bin/activate` is only needed if you want to run bare commands (`python`, `pytest`) without the `uv run` prefix in your terminal session.
 
 ## Commands
 
 ```bash
 # Play interactively
-python src/main.py
+uv run python src/main.py
 
 # Run all tests
-pytest
+uv run pytest
 
 # Run a single test file
-pytest tests/test_rl_env.py -v
+uv run pytest tests/test_rl_env.py -v
 
 # Run tests with coverage
-pytest --cov=src
+uv run pytest --cov=src
 
 # Test the RL environment setup
-python src/training/train.py --mode test
+uv run python src/training/train.py --mode test
 
 # Train a PPO agent (P2 = drop-first fallback)
-python src/training/train.py --mode train --timesteps 100000 --envs 4 --maxsteps 100
+uv run python src/training/train.py --mode train --timesteps 100000 --envs 4 --maxsteps 100
 
 # Train with opponent model (iterative self-play)
-python src/training/train.py --mode train --timesteps 100000 --opponent-model models/ppo_pylinkx.zip
+uv run python src/training/train.py --mode train --timesteps 100000 --opponent-model models/ppo_pylinkx.zip
 
 # Evaluate a trained model
-python src/training/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10 --render
+uv run python src/training/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 10 --render
 
 # Run the self-play training pipeline
-python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip
+uv run python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip
 
 # Run pipeline with custom pool pruning (keep baseline + last 3 RL loops, default)
-python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip --pool-lookback 3
+uv run python src/pipeline/pipeline.py --baseline-model models/base_line_model.zip --pool-lookback 3
 
 # Evaluate all loop models in a round-robin matrix
-python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
+uv run python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
+
+# Test web build locally (starts dev server at http://localhost:8000)
+uv run pygbag src/main.py
+
+# Build standalone executable (Windows/macOS)
+uv run pyinstaller PyLinkx.spec
+
+# Build standalone executable (Linux only)
+# Must replace torch with CPU-only variant first to keep binary size small.
+# Use .venv/bin/pyinstaller directly — uv run would re-sync from uv.lock and revert torch to CUDA.
+uv pip install torch --force-reinstall --index-url https://download.pytorch.org/whl/cpu
+.venv/bin/pyinstaller PyLinkx.spec
 ```
 
 ## Architecture
@@ -103,14 +116,14 @@ After any refactoring, run these three commands and verify none produce errors (
 
 ```bash
 # 1. Unit tests
-pytest
+uv run pytest
 
 # 2. RL environment sanity check
-python src/training/train.py --mode test
+uv run python src/training/train.py --mode test
 
 # 3. Quick train + evaluate cycle
-python src/training/train.py --mode train --timesteps 10000
-python src/training/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 5
+uv run python src/training/train.py --mode train --timesteps 10000
+uv run python src/training/train.py --mode evaluate --model models/ppo_pylinkx.zip --eval-episodes 5
 ```
 
 Expected: test mode prints "✓ Environment working correctly!", train completes and saves the model, evaluate prints episode stats without exceptions.
