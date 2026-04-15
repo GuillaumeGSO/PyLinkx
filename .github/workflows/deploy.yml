@@ -74,7 +74,18 @@ jobs:
           --hidden-import game.player
           --hidden-import game.piece
           --collect-all onnxruntime
+          --exclude-module torch
+          --exclude-module torchvision
+          --exclude-module torchaudio
+          --exclude-module stable_baselines3
+          --exclude-module sb3_contrib
           src/main.py
+
+      - name: Report executable size
+        run: |
+          $size = (Get-Item dist\PyLinkx.exe).Length
+          $sizeMB = [math]::Round($size / 1MB, 1)
+          Write-Output "PyLinkx.exe size: $sizeMB MB ($size bytes)"
 
       - uses: actions/upload-artifact@v5
         with:
@@ -108,7 +119,17 @@ jobs:
           --hidden-import game.player
           --hidden-import game.piece
           --collect-all onnxruntime
+          --exclude-module torch
+          --exclude-module torchvision
+          --exclude-module torchaudio
+          --exclude-module stable_baselines3
+          --exclude-module sb3_contrib
           src/main.py
+
+      - name: Report executable size
+        run: |
+          size=$(stat -f%z dist/PyLinkx)
+          echo "PyLinkx size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
 
       - uses: actions/upload-artifact@v5
         with:
@@ -142,7 +163,17 @@ jobs:
           --hidden-import game.player
           --hidden-import game.piece
           --collect-all onnxruntime
+          --exclude-module torch
+          --exclude-module torchvision
+          --exclude-module torchaudio
+          --exclude-module stable_baselines3
+          --exclude-module sb3_contrib
           src/main.py
+
+      - name: Report executable size
+        run: |
+          size=$(stat -c%s dist/PyLinkx)
+          echo "PyLinkx size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
 
       - uses: actions/upload-artifact@v5
         with:

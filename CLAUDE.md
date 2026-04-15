@@ -70,7 +70,7 @@ uv run pygbag src/main.py
 # Build standalone executable (all platforms — no torch required)
 # PyLinkx.spec is gitignored; see .github/workflows/deploy.yml for the full pyinstaller flags.
 # Local quick build (generates a fresh spec):
-uv run pyinstaller --onefile --name PyLinkx --paths src --add-data "src/models:models" --add-data "src/assets:assets" --hidden-import game.game --hidden-import game.game_renderer --hidden-import game.menu_renderer --hidden-import game.player --hidden-import game.piece --collect-all onnxruntime src/main.py
+uv run pyinstaller --onefile --name PyLinkx --paths src --add-data "src/models:models" --add-data "src/assets:assets" --hidden-import game.game --hidden-import game.game_renderer --hidden-import game.menu_renderer --hidden-import game.player --hidden-import game.piece --collect-all onnxruntime --exclude-module torch --exclude-module torchvision --exclude-module torchaudio --exclude-module stable_baselines3 --exclude-module sb3_contrib src/main.py
 ```
 
 ## Architecture
