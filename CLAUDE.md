@@ -10,7 +10,7 @@ PyLinkx is a two-player block placement game (on a 9x9 grid) with a Gymnasium RL
 
 ```bash
 uv sync                          # install runtime deps (play the game)
-uv sync --group dev              # adds pytest, pygbag
+uv sync --group dev              # adds pytest, pygbag, sb3, torch (training)
 uv sync --group dev --group build  # adds pyinstaller (needed for building executables)
 ```
 
@@ -60,17 +60,17 @@ uv run python src/pipeline/pipeline.py --baseline-model models/base_line_model.z
 # Evaluate all loop models in a round-robin matrix
 uv run python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
 
+# Export game models from models/ to src/models/ as ONNX (run after updating game models)
+# Requires: uv sync --group dev
+uv run python scripts/export_onnx.py
+
 # Test web build locally (starts dev server at http://localhost:8000)
 uv run pygbag src/main.py
 
-# Build standalone executable (Windows/macOS)
-uv run pyinstaller PyLinkx.spec
-
-# Build standalone executable (Linux only)
-# Must replace torch with CPU-only variant first to keep binary size small.
-# Use .venv/bin/pyinstaller directly — uv run would re-sync from uv.lock and revert torch to CUDA.
-uv pip install torch --force-reinstall --index-url https://download.pytorch.org/whl/cpu
-.venv/bin/pyinstaller PyLinkx.spec
+# Build standalone executable (all platforms — no torch required)
+# PyLinkx.spec is gitignored; see .github/workflows/deploy.yml for the full pyinstaller flags.
+# Local quick build (generates a fresh spec):
+uv run pyinstaller --onefile --name PyLinkx --paths src --add-data "src/models:models" --add-data "src/assets:assets" --hidden-import game.game --hidden-import game.game_renderer --hidden-import game.menu_renderer --hidden-import game.player --hidden-import game.piece --collect-all onnxruntime src/main.py
 ```
 
 ## Architecture
@@ -82,7 +82,11 @@ The codebase is split into pure game logic and the RL wrapper:
 - `player.py` — `Player` class: holds each player's piece queue (2× each shape, shuffled), score (largest contiguous area via flood-fill), and win condition check (`check_if_winner` — BFS for border-to-border path).
 - `piece.py` — `Piece` class + `TETRIS_SHAPES` dict: 7 shapes (L, S, c, T, I, u, b), each piece supports `rotate()` and `flip()`.
 - `game_renderer.py` — Pygame rendering, decoupled from game logic.
+- `onnx_policy.py` — `OnnxPolicy`: lightweight inference wrapper around an `.onnx` model. Drop-in replacement for `MaskablePPO.predict()` at runtime; uses `onnxruntime`, no PyTorch needed.
 - `main.py` (`src/`) — Interactive entry point using Pygame event loop.
+
+**Developer scripts** (`scripts/`):
+- `export_onnx.py` — Converts `models/{easy,medium,hard}_model.zip` → `src/models/*.onnx`. Run after updating game models. Requires dev deps (`uv sync --group dev`).
 
 **RL layer** (`src/training/`):
 - `game_env.py` — `PyLinkxEnv(gym.Env)`: wraps `Game` into a Gymnasium environment. Agent plays as P1 only; P2 is controlled internally by a frozen opponent model (`opponent_model_path`) or a drop-first fallback. Observation space is `Dict{"grid": Box(9,9,1), "scalars": Box(258,)}` — scalars include piece position, scores, path progress, current piece shape, and full piece inventory (canonical shape × count) for both players. Action space is `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop). Reward (P1 perspective): +100 path win, +20 score win, −100/−20 P2 wins, +1.0 per drop + path progress bonus, −0.1 invalid, −0.05 cycle, −0.001 other.
@@ -95,8 +99,8 @@ The codebase is split into pure game logic and the RL wrapper:
 - `manifest.json` — Tracks training history, per-loop metrics, and the selected difficulty triplet.
 
 **Model directories**:
-- `src/models/` — Game-ready difficulty models bundled with the itch.io web build: `easy_model.zip`, `medium_model.zip`, `hard_model.zip`. Loaded by `main.py` via `__file__`-relative paths.
-- `models/` (project root) — Training working directory: `base_line_model.zip`, `ppo_pylinkx.zip` (output of `train.py`). Not bundled in the web build.
+- `src/models/` — Game-ready ONNX models bundled with the itch.io web build: `easy_model.onnx`, `medium_model.onnx`, `hard_model.onnx`. Loaded by `main.py` via `__file__`-relative paths. Generate with `scripts/export_onnx.py`.
+- `models/` (project root) — Training working directory: `base_line_model.zip`, `ppo_pylinkx.zip` (output of `train.py`), `easy_model.zip`, `medium_model.zip`, `hard_model.zip` (source models for ONNX export). Not bundled in builds.
 - `src/pipeline/models/` — Pipeline working directory. Loop checkpoints produced during training runs.
 
 **Key design constraint**: `pytest.ini` sets `pythonpath = .` (project root), so all imports use the full `src.` prefix (e.g., `from src.game.game import Game`). Intra-package imports within `src/game/` use relative form (e.g., `from .piece import Piece`). Scripts run directly (`main.py`, `train.py`, `pipeline.py`, `evaluate_matrix.py`) insert the project root into `sys.path` at startup so the same import style works when executed as scripts.

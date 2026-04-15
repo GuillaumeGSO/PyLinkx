@@ -73,9 +73,7 @@ jobs:
           --hidden-import game.menu_renderer
           --hidden-import game.player
           --hidden-import game.piece
-          --hidden-import sb3_contrib
-          --collect-data stable_baselines3
-          --collect-data sb3_contrib
+          --collect-all onnxruntime
           src/main.py
 
       - uses: actions/upload-artifact@v5
@@ -109,9 +107,7 @@ jobs:
           --hidden-import game.menu_renderer
           --hidden-import game.player
           --hidden-import game.piece
-          --hidden-import sb3_contrib
-          --collect-data stable_baselines3
-          --collect-data sb3_contrib
+          --collect-all onnxruntime
           src/main.py
 
       - uses: actions/upload-artifact@v5
@@ -132,9 +128,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: |
-          uv sync --group build
-          uv pip install torch --index-url https://download.pytorch.org/whl/cpu
+        run: uv sync --group build
 
       - name: Build binary
         run: >
@@ -147,9 +141,7 @@ jobs:
           --hidden-import game.menu_renderer
           --hidden-import game.player
           --hidden-import game.piece
-          --hidden-import sb3_contrib
-          --collect-data stable_baselines3
-          --collect-data sb3_contrib
+          --collect-all onnxruntime
           src/main.py
 
       - uses: actions/upload-artifact@v5

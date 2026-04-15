@@ -43,16 +43,16 @@ elif getattr(sys, 'frozen', False):
 else:
     _MODELS_DIR = str(Path(__file__).parent / "models")
 MODEL_PATHS = {
-    "easy":   f"{_MODELS_DIR}/easy_model.zip",
-    "medium": f"{_MODELS_DIR}/medium_model.zip",
-    "hard":   f"{_MODELS_DIR}/hard_model.zip",
+    "easy":   f"{_MODELS_DIR}/easy_model.onnx",
+    "medium": f"{_MODELS_DIR}/medium_model.onnx",
+    "hard":   f"{_MODELS_DIR}/hard_model.onnx",
 }
 DIFF_KEYS = ["easy", "medium", "hard"]  # maps diff_cursor 0-2 to keys
 
 
 def load_ai_model(model_path: str):
-    from sb3_contrib import MaskablePPO
-    return MaskablePPO.load(model_path)
+    from game.onnx_policy import OnnxPolicy
+    return OnnxPolicy(model_path)
 
 
 async def main(ai_model_override=None, ai_delay: int = 150):
@@ -227,7 +227,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description="PyLinkx — human vs human or human vs AI")
     parser.add_argument("--ai-model", default=None,
-                        help="Path to model zip (AI plays as P1, human as P2) — bypasses menu")
+                        help="Path to model .onnx (AI plays as P1, human as P2) — bypasses menu")
     parser.add_argument("--ai-delay", type=int, default=150,
                         help="Milliseconds between AI actions (default: 150)")
     args = parser.parse_args()
