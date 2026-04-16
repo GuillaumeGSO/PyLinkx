@@ -72,6 +72,7 @@ jobs:
 
   # ── 2. Native builds (PyInstaller matrix) ────────────────────────────────
   build-and-deploy:
+    name: build-and-deploy (${{ matrix.platform }})
     needs: [test]
     strategy:
       matrix:
