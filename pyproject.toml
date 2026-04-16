@@ -10,15 +10,21 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = [
+train = [
     "stable-baselines3>=2.0.0",
-    "stable-baselines3[extra]>=2.0.0",
     "sb3-contrib>=2.0.0",
-    "onnxscript",
+]
+test = [
+    {include-group = "train"},
     "pytest",
+]
+export = [
+    {include-group = "train"},
+    "onnxscript",
+]
+web = [
     "pygbag",
 ]
 build = [
     "pyinstaller",
 ]
-

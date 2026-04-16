@@ -10,6 +10,9 @@ dist/
 # Virtual environment
 .venv/
 
+# uv lock file — not committed, CI resolves fresh per group
+uv.lock
+
 # Pygame cache
 *.pyo
 *.pyd

@@ -18,7 +18,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group test
 
       - name: Run tests
         run: uv run pytest -v
@@ -36,7 +36,7 @@ jobs:
           enable-cache: true
 
       - name: Install dependencies
-        run: uv sync --group dev
+        run: uv sync --group web
 
       - name: Build web
         working-directory: src
