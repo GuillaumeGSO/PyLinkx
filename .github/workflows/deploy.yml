@@ -45,7 +45,7 @@ jobs:
       - name: Report build size
         run: |
           size=$(du -sb src/build/web/ | cut -f1)
-          echo "Web build size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
+          python -c "print('Web build size: {:.1f} MB ({} bytes)'.format($size/1048576, $size))"
 
       - name: Read version
         id: version
@@ -140,7 +140,7 @@ jobs:
         shell: bash
         run: |
           size=$(${{ matrix.size_cmd }})
-          echo "${{ matrix.platform }} executable size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
+          python -c "print('${{ matrix.platform }} executable size: {:.1f} MB ({} bytes)'.format($size/1048576, $size))"
 
       - name: Read version
         id: version
