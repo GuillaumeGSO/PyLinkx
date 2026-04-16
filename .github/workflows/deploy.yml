@@ -42,186 +42,14 @@ jobs:
         working-directory: src
         run: uv run pygbag --build main.py
 
-      - uses: actions/upload-artifact@v5
-        with:
-          name: build-web
-          path: src/build/web/
-
-  # ── 2. Windows build (PyInstaller) ────────────────────────────────────────
-  build-windows:
-    needs: [test]
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: "3.12"
-          enable-cache: true
-
-      - name: Install dependencies
-        run: uv sync --group build
-
-      - name: Build exe
-        run: >
-          uv run pyinstaller --onefile --windowed --name PyLinkx
-          --paths src
-          --add-data "src/models;models"
-          --add-data "src/assets;assets"
-          --hidden-import game.game
-          --hidden-import game.game_renderer
-          --hidden-import game.menu_renderer
-          --hidden-import game.player
-          --hidden-import game.piece
-          --collect-all onnxruntime
-          --exclude-module torch
-          --exclude-module torchvision
-          --exclude-module torchaudio
-          --exclude-module stable_baselines3
-          --exclude-module sb3_contrib
-          src/main.py
-
-      - name: Report executable size
+      - name: Report build size
         run: |
-          $size = (Get-Item dist\PyLinkx.exe).Length
-          $sizeMB = [math]::Round($size / 1MB, 1)
-          Write-Output "PyLinkx.exe size: $sizeMB MB ($size bytes)"
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: build-windows
-          path: dist/
-
-  # ── 3. macOS build (PyInstaller) ──────────────────────────────────────────
-  build-macos:
-    needs: [test]
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: "3.12"
-          enable-cache: true
-
-      - name: Install dependencies
-        run: uv sync --group build
-
-      - name: Build app
-        run: >
-          uv run pyinstaller --onefile --windowed --name PyLinkx
-          --paths src
-          --add-data "src/models:models"
-          --add-data "src/assets:assets"
-          --hidden-import game.game
-          --hidden-import game.game_renderer
-          --hidden-import game.menu_renderer
-          --hidden-import game.player
-          --hidden-import game.piece
-          --collect-all onnxruntime
-          --exclude-module torch
-          --exclude-module torchvision
-          --exclude-module torchaudio
-          --exclude-module stable_baselines3
-          --exclude-module sb3_contrib
-          src/main.py
-
-      - name: Report executable size
-        run: |
-          size=$(stat -f%z dist/PyLinkx)
-          echo "PyLinkx size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: build-macos
-          path: dist/
-
-  # ── 4. Linux build (PyInstaller) ──────────────────────────────────────────
-  build-linux:
-    needs: [test]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: astral-sh/setup-uv@v6
-        with:
-          python-version: "3.12"
-          enable-cache: true
-
-      - name: Install dependencies
-        run: uv sync --group build
-
-      - name: Build binary
-        run: >
-          uv run pyinstaller --onefile --name PyLinkx
-          --paths src
-          --add-data "src/models:models"
-          --add-data "src/assets:assets"
-          --hidden-import game.game
-          --hidden-import game.game_renderer
-          --hidden-import game.menu_renderer
-          --hidden-import game.player
-          --hidden-import game.piece
-          --collect-all onnxruntime
-          --exclude-module torch
-          --exclude-module torchvision
-          --exclude-module torchaudio
-          --exclude-module stable_baselines3
-          --exclude-module sb3_contrib
-          src/main.py
-
-      - name: Report executable size
-        run: |
-          size=$(stat -c%s dist/PyLinkx)
-          echo "PyLinkx size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
-
-      - uses: actions/upload-artifact@v5
-        with:
-          name: build-linux
-          path: dist/
-
-  # ── 5. Deploy to itch.io (butler) ─────────────────────────────────────────
-  deploy:
-    needs: [build-web, build-windows, build-macos, build-linux]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          sparse-checkout: |
-            .itch.toml
-            version.py
-          sparse-checkout-cone-mode: false
-
-      - name: Read itch.io config
-        id: itch
-        run: |
-          echo "user=$(grep 'user' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
-          echo "game=$(grep 'game' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+          size=$(du -sb src/build/web/ | cut -f1)
+          echo "Web build size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
 
       - name: Read version
         id: version
-        run: |
-          echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: build-web
-          path: ./artifacts/web
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: build-windows
-          path: ./artifacts/windows
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: build-macos
-          path: ./artifacts/macos
-
-      - uses: actions/download-artifact@v5
-        with:
-          name: build-linux
-          path: ./artifacts/linux
+        run: echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Install butler
         run: |
@@ -230,25 +58,128 @@ jobs:
           unzip -o ./tools/butler.zip -d ./tools
           chmod +x ./tools/butler
           ./tools/butler -V
+
+      - name: Read itch.io config
+        id: itch
+        run: |
+          echo "user=$(grep 'user' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+          echo "game=$(grep 'game' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Push to itch.io
+        run: ./tools/butler push src/build/web/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:html5 --userversion ${{ steps.version.outputs.tag }}
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
 
-      - name: Push web
-        run: ./tools/butler push ./artifacts/web/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:html5 --userversion ${{ steps.version.outputs.tag }}
+  # ── 2. Native builds (PyInstaller matrix) ────────────────────────────────
+  build-and-deploy:
+    needs: [test]
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+            channel: linux
+            butler_platform: linux-amd64
+            executable: dist/PyLinkx
+            add_data_sep: ":"
+            extra_flags: ""
+            size_cmd: "stat -c%s dist/PyLinkx"
+
+          - os: windows-latest
+            platform: windows
+            channel: windows
+            butler_platform: windows-amd64
+            executable: dist/PyLinkx.exe
+            add_data_sep: ";"
+            extra_flags: "--windowed"
+            size_cmd: "powershell -Command \"(Get-Item dist\\PyLinkx.exe).Length\""
+
+          - os: macos-latest
+            platform: macos
+            channel: osx
+            butler_platform: darwin-amd64
+            executable: dist/PyLinkx
+            add_data_sep: ":"
+            extra_flags: "--windowed"
+            size_cmd: "stat -f%z dist/PyLinkx"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install dependencies
+        run: uv sync --group build
+
+      - name: Build executable
+        run: >
+          uv run pyinstaller --onefile --name PyLinkx ${{ matrix.extra_flags }}
+          --paths src
+          --add-data "src/models${{ matrix.add_data_sep }}models"
+          --add-data "src/assets${{ matrix.add_data_sep }}assets"
+          --hidden-import game.game
+          --hidden-import game.game_renderer
+          --hidden-import game.menu_renderer
+          --hidden-import game.player
+          --hidden-import game.piece
+          --collect-all onnxruntime
+          --exclude-module torch
+          --exclude-module torchvision
+          --exclude-module torchaudio
+          --exclude-module stable_baselines3
+          --exclude-module sb3_contrib
+          src/main.py
+
+      - name: Report executable size
+        shell: bash
+        run: |
+          size=$(${{ matrix.size_cmd }})
+          echo "${{ matrix.platform }} executable size: $(echo "scale=1; $size/1048576" | bc) MB ($size bytes)"
+
+      - name: Read version
+        id: version
+        shell: bash
+        run: echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+
+      - name: Install butler (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: |
+          mkdir -p ./tools
+          curl -sSLfo ./tools/butler.zip "https://broth.itch.zone/butler/${{ matrix.butler_platform }}/LATEST/archive/default"
+          unzip -o ./tools/butler.zip -d ./tools
+          chmod +x ./tools/butler
+          ./tools/butler -V
+
+      - name: Install butler (Windows)
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force -Path ./tools
+          Invoke-WebRequest -Uri "https://broth.itch.zone/butler/${{ matrix.butler_platform }}/LATEST/archive/default" -OutFile ./tools/butler.zip
+          Expand-Archive -Path ./tools/butler.zip -DestinationPath ./tools -Force
+          ./tools/butler.exe -V
+
+      - name: Read itch.io config
+        id: itch
+        shell: bash
+        run: |
+          echo "user=$(grep 'user' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+          echo "game=$(grep 'game' .itch.toml | sed 's/.*= *"//' | sed 's/".*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Push to itch.io (Linux/macOS)
+        if: matrix.platform != 'windows'
+        run: ./tools/butler push ${{ matrix.executable }} ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:${{ matrix.channel }} --userversion ${{ steps.version.outputs.tag }}
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
 
-      - name: Push windows
-        run: ./tools/butler push ./artifacts/windows/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:windows --userversion ${{ steps.version.outputs.tag }}
-        env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
-
-      - name: Push macos
-        run: ./tools/butler push ./artifacts/macos/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:osx --userversion ${{ steps.version.outputs.tag }}
-        env:
-          BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
-
-      - name: Push linux
-        run: ./tools/butler push ./artifacts/linux/ ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:linux --userversion ${{ steps.version.outputs.tag }}
+      - name: Push to itch.io (Windows)
+        if: matrix.platform == 'windows'
+        shell: powershell
+        run: ./tools/butler.exe push ${{ matrix.executable }} ${{ steps.itch.outputs.user }}/${{ steps.itch.outputs.game }}:${{ matrix.channel }} --userversion ${{ steps.version.outputs.tag }}
         env:
           BUTLER_API_KEY: ${{ secrets.BUTLER_CREDENTIALS }}
