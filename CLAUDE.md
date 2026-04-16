@@ -73,6 +73,18 @@ uv run pygbag src/main.py
 uv run pyinstaller --onefile --name PyLinkx --paths src --add-data "src/models:models" --add-data "src/assets:assets" --hidden-import game.game --hidden-import game.game_renderer --hidden-import game.menu_renderer --hidden-import game.player --hidden-import game.piece --collect-all onnxruntime --exclude-module torch --exclude-module torchvision --exclude-module torchaudio --exclude-module stable_baselines3 --exclude-module sb3_contrib src/main.py
 ```
 
+## Versioning
+
+**`version.py`** (project root) — single source of truth for the project version string:
+
+```python
+__version__ = "0.3.2"
+```
+
+- Imported by `src/game/menu_renderer.py` to display the version on the in-game menu.
+- Follow **semver**: bump **minor** (0.x.0) for new features, bump **patch** (0.0.x) for bug fixes and small improvements.
+- **Bump the version whenever a new branch is created**, before any other work, using the appropriate increment for the planned change.
+
 ## Architecture
 
 The codebase is split into pure game logic and the RL wrapper:
