@@ -30,3 +30,6 @@ Thumbs.db
 # Test and log files
 logs/
 *.log
+
+# Web test screenshots
+screenshots/

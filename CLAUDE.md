@@ -74,6 +74,16 @@ uv run python scripts/export_onnx.py
 # Test web build locally (starts dev server at http://localhost:8000)
 uv run pygbag src/main.py
 
+# Web test with Playwright (headless browser screenshots + console capture)
+# Prerequisites (one-time): npm install -g playwright && npx playwright install chromium
+# Start pygbag first, then run a scenario:
+uv run pygbag --port 8000 src/main.py &
+NODE_PATH=$(npm root -g) node scripts/web_test.js --scenario vs-hard
+# Available scenarios: vs-hard, vs-medium, vs-easy, 2p, menu
+# Manual key sequence with waits and screenshots:
+NODE_PATH=$(npm root -g) node scripts/web_test.js --keys "ArrowDown,Enter,wait:3000,screenshot,ArrowDown,ArrowDown,Enter"
+# Screenshots saved to ./screenshots/ (gitignored)
+
 # Build standalone executable (all platforms — no torch required)
 # PyLinkx.spec is gitignored; see .github/workflows/deploy.yml for the full pyinstaller flags.
 # Local quick build (generates a fresh spec):
