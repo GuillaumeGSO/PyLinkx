@@ -9,16 +9,21 @@ if sys.platform != 'emscripten':
     sys.path.insert(0, str(Path(__file__).parent))
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import numpy  # noqa: F401 — imported so pygbag pre-loads it in Pyodide
 import pygame
 from game.game import Game, Actions
 from game.game_renderer import GameRenderer
 from game.menu_renderer import MenuRenderer
+try:
+    from game.onnx_policy import OnnxPolicy
+except ImportError:
+    OnnxPolicy = None
 
 try:
-    from training.game_env import build_observation, compute_action_mask
+    from training.observation import build_observation, compute_action_mask
 except ImportError:
     try:
-        from src.training.game_env import build_observation, compute_action_mask
+        from src.training.observation import build_observation, compute_action_mask
     except ImportError:
         build_observation = None
         compute_action_mask = None
@@ -27,6 +32,7 @@ except ImportError:
 MENU = "menu"
 DIFFICULTY = "difficulty"
 HOW_TO_PLAY = "how_to_play"
+LOADING = "loading"
 PLAYING = "playing"
 GAMEOVER = "gameover"
 
@@ -36,9 +42,7 @@ MAX_STEPS_BY_TURN = 36
 # In WASM (pygbag), non-Python files are served under /assets/;
 # in a PyInstaller frozen build, data files live under sys._MEIPASS;
 # otherwise use __file__-relative path.
-if sys.platform == "emscripten":
-    _MODELS_DIR = "/assets/models"
-elif getattr(sys, 'frozen', False):
+if getattr(sys, 'frozen', False):
     _MODELS_DIR = str(Path(sys._MEIPASS) / "models")
 else:
     _MODELS_DIR = str(Path(__file__).parent / "models")
@@ -48,11 +52,6 @@ MODEL_PATHS = {
     "hard":   f"{_MODELS_DIR}/hard_model.onnx",
 }
 DIFF_KEYS = ["easy", "medium", "hard"]  # maps diff_cursor 0-2 to keys
-
-
-def load_ai_model(model_path: str):
-    from game.onnx_policy import OnnxPolicy
-    return OnnxPolicy(model_path)
 
 
 async def main(ai_model_override=None, ai_delay: int = 150):
@@ -74,6 +73,10 @@ async def main(ai_model_override=None, ai_delay: int = 150):
 
     menu_cursor = 0
     diff_cursor = 0
+    loading_label = None
+    loading_loader = None      # WasmModelLoader (WASM only)
+    loading_error = None       # error message string
+    loading_error_timer = 0
 
     game = None
     renderer = None
@@ -103,7 +106,10 @@ async def main(ai_model_override=None, ai_delay: int = 150):
                    game.players.index(game.current_player) == 0):
                 obs = build_observation(game, MAX_STEPS_BY_TURN, ai_steps, True)
                 mask = compute_action_mask(game)
-                action, _ = ai_model.predict(obs, action_masks=mask, deterministic=True)
+                if asyncio.iscoroutinefunction(ai_model.predict):
+                    action, _ = await ai_model.predict(obs, action_masks=mask, deterministic=True)
+                else:
+                    action, _ = ai_model.predict(obs, action_masks=mask, deterministic=True)
                 game.execute_action(int(action))
                 ai_steps += 1
                 if int(action) == Actions.ACTION_DROP or ai_steps >= MAX_STEPS_BY_TURN:
@@ -111,6 +117,37 @@ async def main(ai_model_override=None, ai_delay: int = 150):
                 renderer.draw()
                 pygame.display.flip()
                 await asyncio.sleep(ai_delay / 1000)
+
+        # ------------------------------------------------------------------
+        # Model loading (one step per frame — no internal polling)
+        # ------------------------------------------------------------------
+        if app_state == LOADING:
+            if loading_error:
+                loading_error_timer += 1
+                if loading_error_timer > FPS * 3:  # 3 seconds
+                    loading_error = None
+                    app_state = MENU
+            elif loading_loader:
+                loading_loader.step()
+                if loading_loader.done:
+                    from game.wasm_onnx_policy import WasmOnnxPolicy
+                    ai_model = WasmOnnxPolicy()
+                    start_game()
+                    app_state = PLAYING
+                    loading_loader = None
+                elif loading_loader.error:
+                    loading_error = loading_loader.error
+                    loading_error_timer = 0
+                    loading_loader = None
+            else:
+                # Native: synchronous load
+                try:
+                    ai_model = OnnxPolicy(MODEL_PATHS[loading_label])
+                    start_game()
+                    app_state = PLAYING
+                except Exception as e:
+                    loading_error = str(e)
+                    loading_error_timer = 0
 
         # ------------------------------------------------------------------
         # Events
@@ -150,12 +187,21 @@ async def main(ai_model_override=None, ai_delay: int = 150):
                         if diff_cursor == len(DIFF_KEYS):  # "← Back"
                             app_state = MENU
                         else:
-                            diff_label = DIFF_KEYS[diff_cursor]
-                            menu_renderer.draw_loading(diff_label.capitalize())
-                            pygame.display.flip()
-                            ai_model = load_ai_model(MODEL_PATHS[diff_label])
-                            start_game()
-                            app_state = PLAYING
+                            loading_label = DIFF_KEYS[diff_cursor]
+                            loading_error = None
+                            if sys.platform == "emscripten":
+                                from game.wasm_onnx_policy import WasmModelLoader
+                                loading_loader = WasmModelLoader(
+                                    MODEL_PATHS[loading_label])
+                            else:
+                                loading_loader = None
+                            app_state = LOADING
+
+                elif app_state == LOADING:
+                    if event.key == pygame.K_ESCAPE:
+                        loading_loader = None
+                        loading_error = None
+                        app_state = MENU
 
                 elif app_state == HOW_TO_PLAY:
                     app_state = MENU
@@ -212,6 +258,13 @@ async def main(ai_model_override=None, ai_delay: int = 150):
             menu_renderer.draw_difficulty(diff_cursor)
         elif app_state == HOW_TO_PLAY:
             menu_renderer.draw_how_to_play()
+        elif app_state == LOADING:
+            if loading_error:
+                menu_renderer.draw_error(loading_error)
+            elif loading_loader:
+                menu_renderer.draw_loading(loading_loader.label)
+            else:
+                menu_renderer.draw_loading(loading_label.capitalize())
         elif app_state in (PLAYING, GAMEOVER) and renderer:
             renderer.draw()
 
@@ -235,7 +288,7 @@ if __name__ == "__main__":
     ai_model = None
     if args.ai_model:
         print(f"Loading AI model from {args.ai_model}...")
-        ai_model = load_ai_model(args.ai_model)
+        ai_model = OnnxPolicy(args.ai_model)
         print("AI model loaded. You play as P2.")
 
     asyncio.run(main(ai_model_override=ai_model, ai_delay=args.ai_delay))
