@@ -15,15 +15,15 @@ from game.game import Game, Actions
 from game.game_renderer import GameRenderer
 from game.menu_renderer import MenuRenderer
 try:
-    from game.onnx_policy import OnnxPolicy
+    from inference.onnx_policy import OnnxPolicy
 except ImportError:
     OnnxPolicy = None
 
 try:
-    from training.observation import build_observation, compute_action_mask
+    from inference.observation import build_observation, compute_action_mask
 except ImportError:
     try:
-        from src.training.observation import build_observation, compute_action_mask
+        from src.inference.observation import build_observation, compute_action_mask
     except ImportError:
         build_observation = None
         compute_action_mask = None
@@ -130,7 +130,7 @@ async def main(ai_model_override=None, ai_delay: int = 150):
             elif loading_loader:
                 loading_loader.step()
                 if loading_loader.done:
-                    from game.wasm_onnx_policy import WasmOnnxPolicy
+                    from inference.wasm_onnx_policy import WasmOnnxPolicy
                     ai_model = WasmOnnxPolicy()
                     start_game()
                     app_state = PLAYING
@@ -190,7 +190,7 @@ async def main(ai_model_override=None, ai_delay: int = 150):
                             loading_label = DIFF_KEYS[diff_cursor]
                             loading_error = None
                             if sys.platform == "emscripten":
-                                from game.wasm_onnx_policy import WasmModelLoader
+                                from inference.wasm_onnx_policy import WasmModelLoader
                                 loading_loader = WasmModelLoader(
                                     MODEL_PATHS[loading_label])
                             else:

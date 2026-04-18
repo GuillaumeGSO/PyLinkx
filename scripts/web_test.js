@@ -40,8 +40,8 @@ function getArg(name, defaultVal) {
 
 const URL = getArg("url", "http://localhost:8000");
 const OUT_DIR = getArg("out", path.join(process.cwd(), "screenshots"));
-const WAIT_SECS = parseInt(getArg("wait", "15"), 10);
-const SCENARIO = getArg("scenario", "");
+const WAIT_SECS = parseInt(getArg("wait", "40"), 10);
+const SCENARIO = getArg("scenario", "vs-hard");
 const KEYS_RAW = getArg("keys", "");
 
 // -- Scenarios --------------------------------------------------------------
@@ -51,8 +51,18 @@ const SCENARIOS = {
     "ArrowDown", "Enter",
     // Difficulty menu → Hard (Easy=0, Medium=1, Hard=2)
     "wait:2000", "ArrowDown", "ArrowDown", "Enter",
-    // Wait for model to load and game to start
-    "wait:5000", "screenshot",
+    // Wait for model to load, AI to play, then P2 turn
+    "wait:15000", "screenshot",
+    // P2: move left, screenshot
+    "ArrowLeft", "ArrowLeft", "wait:500", "screenshot",
+    // P2: move right, screenshot
+    "ArrowRight", "ArrowRight", "ArrowRight", "wait:500", "screenshot",
+    // P2: rotate (Up), screenshot
+    "ArrowUp", "wait:500", "screenshot",
+    // P2: flip (Enter), screenshot
+    "Enter", "wait:500", "screenshot",
+    // P2: cycle piece (Tab), screenshot
+    "Tab", "wait:500", "screenshot",
   ],
   "vs-medium": [
     "ArrowDown", "Enter",
@@ -95,6 +105,11 @@ function buildSteps() {
 (async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
+  // Clean old screenshots
+  for (const f of fs.readdirSync(OUT_DIR)) {
+    if (f.endsWith(".png")) fs.unlinkSync(path.join(OUT_DIR, f));
+  }
+
   const browser = await chromium.launch({ headless: true });
   const page = await browser.newPage({ viewport: { width: 1024, height: 768 } });
 
@@ -106,17 +121,40 @@ function buildSteps() {
   console.log(`Navigating to ${URL} ...`);
   await page.goto(URL, { waitUntil: "networkidle", timeout: 60000 });
 
-  // Wait for pygbag to download Python + wheels
-  console.log(`Waiting ${WAIT_SECS}s for game to load ...`);
-  await page.waitForTimeout(WAIT_SECS * 1000);
-
-  // Click canvas to dismiss "Ready to start ! Please click/touch page"
-  console.log("Clicking canvas to unlock media gate ...");
-  await page.click("canvas", { force: true }).catch(() => {
-    console.log("No canvas found, clicking page center ...");
-    return page.mouse.click(512, 384);
-  });
-  await page.waitForTimeout(5000);
+  // Poll until game is ready: wait for initial load, then click to dismiss
+  // the "Ready to start ! Please click/touch page" splash, and keep clicking
+  // until the pygame canvas is rendering (splash gone).
+  console.log(`Waiting up to ${WAIT_SECS * 2}s for game to load ...`);
+  const maxAttempts = WAIT_SECS * 2;  // one attempt per second
+  let ready = false;
+  for (let i = 0; i < maxAttempts; i++) {
+    await page.waitForTimeout(1000);
+    // Try clicking the canvas every few seconds
+    if (i >= WAIT_SECS && i % 3 === 0) {
+      await page.click("canvas", { force: true }).catch(() =>
+        page.mouse.click(512, 384)
+      );
+    }
+    // Check if the splash text is gone (pygbag sets a DOM element)
+    const splashGone = await page.evaluate(() => {
+      const el = document.getElementById("ume");
+      return !el || el.style.display === "none" || el.offsetHeight === 0;
+    }).catch(() => false);
+    if (splashGone && i >= WAIT_SECS) {
+      console.log(`Game ready after ${i}s`);
+      ready = true;
+      await page.waitForTimeout(2000);  // let the menu render
+      break;
+    }
+  }
+  if (!ready) {
+    // Final click attempt
+    console.log("Splash may still be up, clicking once more ...");
+    await page.click("canvas", { force: true }).catch(() =>
+      page.mouse.click(512, 384)
+    );
+    await page.waitForTimeout(3000);
+  }
 
   // Screenshot after initial load
   let shotNum = 1;

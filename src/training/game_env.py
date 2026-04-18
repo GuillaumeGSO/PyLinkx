@@ -7,7 +7,7 @@ import pygame
 from src.game.game import Game, Actions
 from src.game.game_renderer import GameRenderer
 from src.game.piece import TETRIS_SHAPES
-from src.training.observation import (
+from src.inference.observation import (
     PIECE_MAP, compute_action_mask, compute_path_progress, build_observation,
     _build_piece_inventory, _CANONICAL_SHAPES,
 )
