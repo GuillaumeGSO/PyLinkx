@@ -1,24 +1,38 @@
 import sys
+from pathlib import Path
 
 import pygame
 
 from .game_renderer import _draw_gradient, _FONT
 
-try:
-    from version import __version__
-except ImportError:
-    __version__ = ""
 
-_IS_WASM = sys.platform == "emscripten"
-_IS_WASM = False # temporary hack to disable vs computer mode on web build, since the AI is too slow in Python. Will re-enable once we have a JS port of the AI.
+def _read_version() -> str:
+    """Read version from version.py next to the src/ package."""
+    try:
+        from version import __version__
+        return __version__
+    except ImportError:
+        pass
+    # Fallback: read the file directly (needed for pygbag/emscripten where
+    # loose .py files may not be importable as modules).
+    try:
+        text = (Path(__file__).resolve().parent.parent / "version.py").read_text()
+        for line in text.splitlines():
+            if line.startswith("__version__"):
+                return line.split("=", 1)[1].strip().strip("\"'")
+    except Exception:
+        pass
+    return ""
+
+
+__version__ = _read_version()
 
 class MenuRenderer:
 
     SCREEN_WIDTH = 1000
     SCREEN_HEIGHT = 600
 
-    MENU_ITEMS = (["2 Human Players", "How to Play"] if _IS_WASM
-                  else ["2 Human Players", "Human vs Computer", "How to Play"])
+    MENU_ITEMS = ["2 Human Players", "Human vs Computer", "How to Play"]
     DIFF_ITEMS = ["Easy", "Medium", "Hard", "< Back"]
 
     GOLD = (255, 215, 0)

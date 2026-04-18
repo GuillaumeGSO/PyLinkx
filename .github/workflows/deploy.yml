@@ -49,7 +49,7 @@ jobs:
 
       - name: Read version
         id: version
-        run: echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(python -c 'from src.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Install butler
         run: |
@@ -145,7 +145,7 @@ jobs:
       - name: Read version
         id: version
         shell: bash
-        run: echo "tag=$(python -c 'from version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
+        run: echo "tag=$(python -c 'from src.version import __version__; print(__version__)')" >> "$GITHUB_OUTPUT"
 
       - name: Install butler (Linux/macOS)
         if: matrix.platform != 'windows'

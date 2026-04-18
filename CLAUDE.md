@@ -92,7 +92,7 @@ uv run pyinstaller --onefile --name PyLinkx --paths src --add-data "src/models:m
 
 ## Versioning
 
-**`version.py`** (project root) — single source of truth for the project version string:
+**`src/version.py`** — single source of truth for the project version string:
 
 ```python
 __version__ = "0.3.2"
