@@ -10,7 +10,7 @@ except ImportError:
     __version__ = ""
 
 _IS_WASM = sys.platform == "emscripten"
-
+_IS_WASM = False # temporary hack to disable vs computer mode on web build, since the AI is too slow in Python. Will re-enable once we have a JS port of the AI.
 
 class MenuRenderer:
 
@@ -158,3 +158,13 @@ class MenuRenderer:
         msg = self.font_item.render(f"Loading {label}...", True, self.DIM)
         self.screen.blit(msg, (self.SCREEN_WIDTH // 2 - msg.get_width() // 2,
                                self.SCREEN_HEIGHT // 2 - msg.get_height() // 2))
+
+    def draw_error(self, message: str):
+        self.draw_gradient_background()
+        self._draw_title()
+        err = self.font_item.render("Error loading AI model:", True, (220, 60, 60))
+        self.screen.blit(err, (self.SCREEN_WIDTH // 2 - err.get_width() // 2,
+                               self.SCREEN_HEIGHT // 2 - 30))
+        detail = self.font_hint.render(message[:100], True, self.WHITE)
+        self.screen.blit(detail, (self.SCREEN_WIDTH // 2 - detail.get_width() // 2,
+                                  self.SCREEN_HEIGHT // 2 + 10))

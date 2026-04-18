@@ -10,9 +10,16 @@ PyLinkx is a two-player block placement game (on a 9x9 grid) with a Gymnasium RL
 
 ```bash
 uv sync                          # install runtime deps (play the game)
-uv sync --group dev              # adds pytest, pygbag, sb3, torch (training)
-uv sync --group dev --group build  # adds pyinstaller (needed for building executables)
+uv sync --group test             # adds pytest + sb3/torch (run tests)
+uv sync --group train            # adds sb3/torch (training only, no pytest)
+uv sync --group export           # adds sb3/torch + onnxscript (ONNX export)
+uv sync --group web              # adds pygbag (web build)
+uv sync --group build            # adds pyinstaller (build executables)
 ```
+
+Switching groups locally is clean — `uv sync --group <name>` installs exactly that group and removes anything outside it. No need to wipe the venv manually.
+
+`uv.lock` is not committed — CI resolves deps fresh on each run, matching the spirit of per-group `requirements-*.txt` files.
 
 ## Running Commands
 
@@ -61,17 +68,39 @@ uv run python src/pipeline/pipeline.py --baseline-model models/base_line_model.z
 uv run python src/pipeline/evaluate_matrix.py --from-manifest src/pipeline/manifest.json --episodes 200
 
 # Export game models from models/ to src/models/ as ONNX (run after updating game models)
-# Requires: uv sync --group dev
+# Requires: uv sync --group export
 uv run python scripts/export_onnx.py
 
 # Test web build locally (starts dev server at http://localhost:8000)
 uv run pygbag src/main.py
+
+# Web test with Playwright (headless browser screenshots + console capture)
+# Prerequisites (one-time): npm install && npx playwright install chromium
+# Start pygbag first, then run a scenario:
+uv run pygbag --port 8000 src/main.py &
+node scripts/web_test.js --scenario vs-hard
+# Available scenarios: vs-hard, vs-medium, vs-easy, 2p, menu
+# Manual key sequence with waits and screenshots:
+node scripts/web_test.js --keys "ArrowDown,Enter,wait:3000,screenshot,ArrowDown,ArrowDown,Enter"
+# Screenshots saved to ./screenshots/ (gitignored)
 
 # Build standalone executable (all platforms — no torch required)
 # PyLinkx.spec is gitignored; see .github/workflows/deploy.yml for the full pyinstaller flags.
 # Local quick build (generates a fresh spec):
 uv run pyinstaller --onefile --name PyLinkx --paths src --add-data "src/models:models" --add-data "src/assets:assets" --hidden-import game.game --hidden-import game.game_renderer --hidden-import game.menu_renderer --hidden-import game.player --hidden-import game.piece --collect-all onnxruntime --exclude-module torch --exclude-module torchvision --exclude-module torchaudio --exclude-module stable_baselines3 --exclude-module sb3_contrib src/main.py
 ```
+
+## Versioning
+
+**`version.py`** (project root) — single source of truth for the project version string:
+
+```python
+__version__ = "0.3.2"
+```
+
+- Imported by `src/game/menu_renderer.py` to display the version on the in-game menu.
+- Follow **semver**: bump **minor** (0.x.0) for new features, bump **patch** (0.0.x) for bug fixes and small improvements.
+- **Bump the version whenever a new branch is created**, before any other work, using the appropriate increment for the planned change.
 
 ## Architecture
 
@@ -86,7 +115,7 @@ The codebase is split into pure game logic and the RL wrapper:
 - `main.py` (`src/`) — Interactive entry point using Pygame event loop.
 
 **Developer scripts** (`scripts/`):
-- `export_onnx.py` — Converts `models/{easy,medium,hard}_model.zip` → `src/models/*.onnx`. Run after updating game models. Requires dev deps (`uv sync --group dev`).
+- `export_onnx.py` — Converts `models/{easy,medium,hard}_model.zip` → `src/models/*.onnx`. Run after updating game models. Requires export deps (`uv sync --group export`).
 
 **RL layer** (`src/training/`):
 - `game_env.py` — `PyLinkxEnv(gym.Env)`: wraps `Game` into a Gymnasium environment. Agent plays as P1 only; P2 is controlled internally by a frozen opponent model (`opponent_model_path`) or a drop-first fallback. Observation space is `Dict{"grid": Box(9,9,1), "scalars": Box(258,)}` — scalars include piece position, scores, path progress, current piece shape, and full piece inventory (canonical shape × count) for both players. Action space is `Discrete(6)` (cycle piece, move left/right, rotate, flip, drop). Reward (P1 perspective): +100 path win, +20 score win, −100/−20 P2 wins, +1.0 per drop + path progress bonus, −0.1 invalid, −0.05 cycle, −0.001 other.

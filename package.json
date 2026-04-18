@@ -1,0 +1,26 @@
+{
+  "name": "pylinkx",
+  "version": "1.0.0",
+  "description": "PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasium RL environment for training reinforcement learning agents. Players place tetris-like pieces and win by connecting opposite borders (path win) or holding the largest contiguous area when all pieces are used (score win).",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GuillaumeGSO/PyLinkx.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/GuillaumeGSO/PyLinkx/issues"
+  },
+  "homepage": "https://github.com/GuillaumeGSO/PyLinkx#readme",
+  "dependencies": {
+    "playwright": "^1.59.1"
+  }
+}

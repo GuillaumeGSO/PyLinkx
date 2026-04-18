@@ -10,6 +10,9 @@ dist/
 # Virtual environment
 .venv/
 
+# uv lock file — not committed, CI resolves fresh per group
+uv.lock
+
 # Pygame cache
 *.pyo
 *.pyd
@@ -27,3 +30,9 @@ Thumbs.db
 # Test and log files
 logs/
 *.log
+
+# Node (Playwright web tests)
+node_modules/
+
+# Web test screenshots
+screenshots/
