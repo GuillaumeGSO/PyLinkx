@@ -3,7 +3,7 @@
 // Playwright-based web test harness for the PyLinkx pygbag build.
 //
 // Prerequisites (one-time):
-//   npm install -g playwright
+//   npm install
 //   npx playwright install chromium
 //
 // Usage:
@@ -11,13 +11,13 @@
 //   uv run pygbag --port 8000 src/main.py &
 //
 //   # Run a scenario (starts game as Human vs Computer Hard):
-//   NODE_PATH=$(npm root -g) node scripts/web_test.js --scenario vs-hard
+//   node scripts/web_test.js --scenario vs-hard
 //
 //   # Manual key sequence with waits and mid-sequence screenshots:
-//   NODE_PATH=$(npm root -g) node scripts/web_test.js --keys "ArrowDown,Enter,wait:3000,screenshot,ArrowDown,ArrowDown,Enter"
+//   node scripts/web_test.js --keys "ArrowDown,Enter,wait:3000,screenshot,ArrowDown,ArrowDown,Enter"
 //
 //   # Custom URL / output dir / load wait:
-//   NODE_PATH=$(npm root -g) node scripts/web_test.js --scenario vs-hard --url http://localhost:8080 --out /tmp/shots --wait 20
+//   node scripts/web_test.js --scenario vs-hard --url http://localhost:8080 --out /tmp/shots --wait 20
 //
 // Key DSL (comma-separated):
 //   KeyName     — any Playwright key name (Enter, ArrowDown, ArrowUp, Tab, etc.)
