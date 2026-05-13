@@ -115,6 +115,7 @@ The codebase is split into pure game logic and the RL wrapper:
 
 **Inference layer** (`src/inference/`):
 - `onnx_policy.py` — `OnnxPolicy`: ONNX runtime wrapper, drop-in replacement for `MaskablePPO.predict()`. No PyTorch needed.
+- `wasm_onnx_policy.py` — `WasmOnnxPolicy` / `WasmModelLoader`: browser-side ONNX inference via onnxruntime-web CDN. Used in the pygbag WASM build where native onnxruntime is unavailable.
 - `observation.py` — `build_observation` / `compute_action_mask` / `compute_path_progress`. Shared by training, gameplay, and WASM inference.
 - `tactical.py` — 1-ply lookahead safety net. `find_tactical_move(game, player_idx)` returns a winning placement (if any legal placement wins this turn), else a placement that neutralizes every pre-existing opponent one-move threat, else `None`. Called in `main.py` before the model loop so all three difficulty models short-circuit on obvious tactics.
 

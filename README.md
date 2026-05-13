@@ -2,24 +2,28 @@
 
 PyLinkx is a two-player block placement game on a 9×9 grid with a full Gymnasium RL environment for training reinforcement learning agents. Players place tetris-like pieces and win by connecting opposite borders (path win) or holding the largest contiguous area when all pieces are used (score win).
 
-![Screenshot](assests/Screenshot_V0.png)
+![Screenshot](assets/Screenshot_V1.png)
 
 
 ## Setup
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt          # runtime only (play the game)
-pip install -r requirements-dev.txt      # adds pytest, pygbag, tensorboard
+uv sync                          # install runtime deps (play the game)
+uv sync --group test             # adds pytest + sb3/torch (run tests)
+uv sync --group train            # adds sb3/torch (training only)
+uv sync --group export           # adds sb3/torch + onnxscript (ONNX export)
+uv sync --group web              # adds pygbag (web build)
+uv sync --group build            # adds pyinstaller (build executables)
 ```
+
+**Prefix all Python commands with `uv run`** — no manual venv activation needed.
 
 ## Usage
 
 ### Play Interactively
 
 ```bash
-python src/main.py
+uv run python src/main.py
 ```
 
 **Goal:** Connect two opposite borders of the 9×9 grid with your pieces (path win), or hold the largest contiguous area when all pieces are used (score win). Players alternate turns.
@@ -33,23 +37,25 @@ python src/main.py
 | `↑` | Rotate piece 90° clockwise |
 | `Enter` | Flip piece horizontally |
 | `↓` | Drop piece (place it, ends your turn) |
-| `R` | Restart (game over screen) |
-| `Esc` | Quit |
+| `P` | Force pass (when no valid moves available) |
+| `Esc` | Return to menu |
+| `R` | Restart game (game over screen) |
+| `M` / `Esc` | Return to menu (game over screen) |
 
 ### RL Training
 
 ```bash
 # Verify environment works
-python src/training/train.py --mode test
+uv run python src/training/train.py --mode test
 
 # Train against drop-first fallback P2 (first loop)
-python src/training/train.py --mode train --timesteps 4000000
+uv run python src/training/train.py --mode train --timesteps 4000000
 
 # Train against a frozen opponent model (iterative self-play)
-python src/training/train.py --mode train --timesteps 4000000 --opponent-model models/best_model.zip
+uv run python src/training/train.py --mode train --timesteps 4000000 --opponent-model models/best_model.zip
 
 # Evaluate a trained model
-python src/training/train.py --mode evaluate --model models/best_model.zip --eval-episodes 200 --render
+uv run python src/training/train.py --mode evaluate --model models/best_model.zip --eval-episodes 200 --render
 ```
 
 **Training options:**
@@ -68,7 +74,7 @@ python src/training/train.py --mode evaluate --model models/best_model.zip --eva
 Training automatically logs metrics to TensorBoard. Launch it in a separate terminal while training runs:
 
 ```bash
-tensorboard --logdir logs
+uv run tensorboard --logdir logs
 # Open http://localhost:6006
 ```
 
@@ -86,15 +92,15 @@ The `game/` metrics come from a mini-evaluation (20 episodes) run every `--game-
 ### Tests
 
 ```bash
-pytest                          # All tests
-pytest tests/test_rl_env.py -v  # RL environment only
-pytest --cov=src                # With coverage
+uv run pytest                          # All tests
+uv run pytest tests/test_rl_env.py -v  # RL environment only
+uv run pytest --cov=src                # With coverage
 ```
 
 ### Web Build (itch.io)
 
 ```bash
-python -m pygbag src/main.py
+uv run pygbag src/main.py
 ```
 
 Opens a local server at `http://localhost:8000` — verify the game works in browser, then upload the generated `build/web/` folder to itch.io. Set the game kind to **HTML** and iframe dimensions to **1000×600**.
@@ -111,6 +117,12 @@ Opens a local server at `http://localhost:8000` — verify the game works in bro
 │   │   ├── piece.py                 # Tetris piece definitions (7 shapes)
 │   │   ├── game_renderer.py         # Pygame rendering
 │   │   └── menu_renderer.py         # Menu rendering
+│   ├── inference/
+│   │   ├── onnx_policy.py           # ONNX runtime wrapper (native)
+│   │   ├── wasm_onnx_policy.py      # ONNX runtime wrapper (WASM/browser)
+│   │   ├── observation.py           # build_observation / compute_action_mask
+│   │   └── tactical.py             # 1-ply lookahead safety net
+│   ├── models/                      # Game-ready ONNX models bundled in web build
 │   ├── training/
 │   │   ├── game_env.py              # Gymnasium environment wrapper
 │   │   └── train.py                 # PPO training, evaluation, and test scripts
@@ -121,10 +133,9 @@ Opens a local server at `http://localhost:8000` — verify the game works in bro
 ├── tests/
 │   ├── test_game_*.py               # Game logic tests
 │   ├── test_player_*.py             # Player scoring tests
-│   └── test_rl_env.py               # Gymnasium environment tests
+│   ├── test_rl_env.py               # Gymnasium environment tests
+│   └── test_tactical.py             # Tactical layer tests
 ├── models/                          # Training working directory (ppo_pylinkx.zip, base_line_model.zip)
-├── src/models/                      # Game-ready difficulty models bundled in itch.io web build
-├── requirements.txt
 └── README.md
 ```
 
@@ -213,9 +224,9 @@ Key trends:
 - Longer training runs (4M+) produce noticeably better results
 - Diminishing returns observed at loop 5 — may indicate a plateau in the current architecture/reward setup
 
-## Roadmap
+## AI Difficulty
 
-**Goal**: Add a game menu where the player chooses to play against a human (current mode) or against one of three AI difficulty levels:
+The game menu lets you choose to play against a human or against one of three AI difficulty levels:
 
 | Difficulty | Description |
 |------------|-------------|
@@ -223,18 +234,17 @@ Key trends:
 | Medium | Mid-loop model (decent area control, some path attempts) |
 | Hard | Best available model (strong path-building strategy) |
 
-This requires training many models through the self-play curriculum, evaluating them, and selecting three that provide distinct difficulty levels for a human player. The training pipeline will be automated to version models per loop, evaluate against multiple baselines, and detect when improvement plateaus.
+All three models share a 1-ply lookahead safety net (`src/inference/tactical.py`) that ensures they never miss an obvious winning move or leave a trivially blockable threat undefended.
 
 ## Dependencies
 
-**Runtime** (`requirements.txt`):
-- **pygame-ce** — game rendering and UI (Community Edition, with WebAssembly support)
-- **gymnasium** — RL environment standard
-- **numpy** — numerical computing
-- **stable-baselines3** — PPO base implementation
-- **sb3-contrib** — MaskablePPO with action masking
+Managed via `pyproject.toml` with `uv`. Groups:
 
-**Dev/build** (`requirements-dev.txt`):
-- **stable-baselines3[extra]** — adds TensorBoard logging
-- **pytest** — testing framework
-- **pygbag** — web build for itch.io
+| Group | Key packages |
+|-------|-------------|
+| runtime (default) | pygame-ce, gymnasium, numpy, onnxruntime |
+| test | pytest, stable-baselines3, sb3-contrib, torch |
+| train | stable-baselines3, sb3-contrib, torch |
+| export | stable-baselines3 + onnxscript (ONNX conversion) |
+| web | pygbag (WASM build) |
+| build | pyinstaller (standalone executable) |
