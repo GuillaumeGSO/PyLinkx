@@ -28,6 +28,15 @@ except ImportError:
         build_observation = None
         compute_action_mask = None
 
+try:
+    from inference.tactical import find_tactical_move, execute_placement
+except ImportError:
+    try:
+        from src.inference.tactical import find_tactical_move, execute_placement
+    except ImportError:
+        find_tactical_move = None
+        execute_placement = None
+
 # App states
 MENU = "menu"
 DIFFICULTY = "difficulty"
@@ -101,22 +110,29 @@ async def main(ai_model_override=None, ai_delay: int = 150):
         if (app_state == PLAYING and ai_model and game and
                 game.status == game.PLAYING and
                 game.players.index(game.current_player) == 0):
-            ai_steps = 0
-            while (game.status == game.PLAYING and
-                   game.players.index(game.current_player) == 0):
-                obs = build_observation(game, MAX_STEPS_BY_TURN, ai_steps, True)
-                mask = compute_action_mask(game)
-                if asyncio.iscoroutinefunction(ai_model.predict):
-                    action, _ = await ai_model.predict(obs, action_masks=mask, deterministic=True)
-                else:
-                    action, _ = ai_model.predict(obs, action_masks=mask, deterministic=True)
-                game.execute_action(int(action))
-                ai_steps += 1
-                if int(action) == Actions.ACTION_DROP or ai_steps >= MAX_STEPS_BY_TURN:
-                    ai_steps = 0
+            tactical = find_tactical_move(game, player_idx=0) if find_tactical_move else None
+            if tactical is not None:
+                execute_placement(game, tactical)
                 renderer.draw()
                 pygame.display.flip()
                 await asyncio.sleep(ai_delay / 1000)
+            else:
+                ai_steps = 0
+                while (game.status == game.PLAYING and
+                       game.players.index(game.current_player) == 0):
+                    obs = build_observation(game, MAX_STEPS_BY_TURN, ai_steps, True)
+                    mask = compute_action_mask(game)
+                    if asyncio.iscoroutinefunction(ai_model.predict):
+                        action, _ = await ai_model.predict(obs, action_masks=mask, deterministic=True)
+                    else:
+                        action, _ = ai_model.predict(obs, action_masks=mask, deterministic=True)
+                    game.execute_action(int(action))
+                    ai_steps += 1
+                    if int(action) == Actions.ACTION_DROP or ai_steps >= MAX_STEPS_BY_TURN:
+                        ai_steps = 0
+                    renderer.draw()
+                    pygame.display.flip()
+                    await asyncio.sleep(ai_delay / 1000)
 
         # ------------------------------------------------------------------
         # Model loading (one step per frame — no internal polling)

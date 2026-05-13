@@ -111,8 +111,12 @@ The codebase is split into pure game logic and the RL wrapper:
 - `player.py` — `Player` class: holds each player's piece queue (2× each shape, shuffled), score (largest contiguous area via flood-fill), and win condition check (`check_if_winner` — BFS for border-to-border path).
 - `piece.py` — `Piece` class + `TETRIS_SHAPES` dict: 7 shapes (L, S, c, T, I, u, b), each piece supports `rotate()` and `flip()`.
 - `game_renderer.py` — Pygame rendering, decoupled from game logic.
-- `onnx_policy.py` — `OnnxPolicy`: lightweight inference wrapper around an `.onnx` model. Drop-in replacement for `MaskablePPO.predict()` at runtime; uses `onnxruntime`, no PyTorch needed.
 - `main.py` (`src/`) — Interactive entry point using Pygame event loop.
+
+**Inference layer** (`src/inference/`):
+- `onnx_policy.py` — `OnnxPolicy`: ONNX runtime wrapper, drop-in replacement for `MaskablePPO.predict()`. No PyTorch needed.
+- `observation.py` — `build_observation` / `compute_action_mask` / `compute_path_progress`. Shared by training, gameplay, and WASM inference.
+- `tactical.py` — 1-ply lookahead safety net. `find_tactical_move(game, player_idx)` returns a winning placement (if any legal placement wins this turn), else a placement that neutralizes every pre-existing opponent one-move threat, else `None`. Called in `main.py` before the model loop so all three difficulty models short-circuit on obvious tactics.
 
 **Developer scripts** (`scripts/`):
 - `export_onnx.py` — Converts `models/{easy,medium,hard}_model.zip` → `src/models/*.onnx`. Run after updating game models. Requires export deps (`uv sync --group export`).
@@ -160,6 +164,8 @@ uv run python src/training/train.py --mode evaluate --model models/ppo_pylinkx.z
 ```
 
 Expected: test mode prints "✓ Environment working correctly!", train completes and saves the model, evaluate prints episode stats without exceptions.
+
+When changing the AI integration in `main.py` or the tactical layer, also do an interactive smoke test (`uv run python src/main.py`, pick a difficulty) and confirm the AI still takes obvious one-move wins and blocks obvious one-move threats.
 
 ### Fixing failing tests
 
